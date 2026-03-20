@@ -1,7 +1,6 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { motion, useInView } from 'framer-motion';
-import { useRef } from 'react';
 import { useDossier } from '@/store';
 import { CONFIG } from '@/lib/config';
 import Counter from '../ui/Counter';
@@ -30,17 +29,33 @@ function useTypewriter(text: string, active: boolean, speed=22, delay=200) {
   return { out, done };
 }
 
-// Editable text helper
+// Editable text helper — saves on blur only to prevent cursor jumping
 function E({ sk, html, className, style, tag='div' }: { sk:string; html:string; className?:string; style?:React.CSSProperties; tag?:string }) {
   const { content, setContent, mode } = useDossier();
   const editable = mode === 'admin';
-  const val = content[sk] ?? html;
+  const ref = useRef<any>(null);
   const Tag = tag as any;
+
+  // Set initial content once on mount or when key changes
+  useEffect(() => {
+    if (!ref.current) return;
+    const current = ref.current.innerHTML;
+    const target = content[sk] ?? html;
+    // Only update DOM if content differs AND field is not focused
+    if (current !== target && document.activeElement !== ref.current) {
+      ref.current.innerHTML = target;
+    }
+  }, [sk, content[sk], html]);
+
   return (
-    <Tag contentEditable={editable} suppressContentEditableWarning
-      onInput={(e:any) => setContent(sk, (e.target as HTMLElement).innerHTML)}
-      className={className} style={style}
-      dangerouslySetInnerHTML={{ __html: val }}
+    <Tag
+      ref={ref}
+      contentEditable={editable}
+      suppressContentEditableWarning
+      onBlur={(e:any) => setContent(sk, (e.target as HTMLElement).innerHTML)}
+      className={className}
+      style={{ ...style, outline: 'none' }}
+      dangerouslySetInnerHTML={undefined}
     />
   );
 }
