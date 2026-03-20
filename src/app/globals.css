@@ -1,0 +1,105 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Raleway:wght@300;400;500;600&family=Share+Tech+Mono&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --g: #C9A84C; --gl: #E8C97A; --gd: #8B6914;
+  --tx: #F0E8D0; --mu: #A89878; --red: #C0392B;
+  --cyan: #50C8C8;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; background: #050810; overflow: hidden; }
+
+/* Custom scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: rgba(201,168,76,.04); }
+::-webkit-scrollbar-thumb { background: rgba(201,168,76,.28); border-radius: 2px; }
+
+/* Custom cursor */
+*, *::before, *::after { cursor: none !important; }
+#custom-cursor {
+  position: fixed; width: 20px; height: 20px; pointer-events: none;
+  z-index: 99999; transform: translate(-50%, -50%);
+  transition: transform 0.08s ease, opacity 0.2s ease;
+}
+#custom-cursor.clicking { transform: translate(-50%, -50%) scale(0.7); }
+#cursor-trail {
+  position: fixed; pointer-events: none; z-index: 99998;
+  width: 6px; height: 6px; border-radius: 50%;
+  background: rgba(201,168,76,0.5);
+  transform: translate(-50%, -50%);
+  transition: transform 0.18s ease, left 0.06s ease, top 0.06s ease;
+}
+
+/* Slide backgrounds */
+.bg-slide-cover { background: linear-gradient(160deg, #0D1117 0%, #141B24 45%, #1a2235 75%, #0D1117); }
+.bg-b1 { background: linear-gradient(135deg, #141B24, #1a2535, #0f1620); }
+.bg-b2 { background: linear-gradient(135deg, #151a20, #1a2030, #101520); }
+.bg-b3 { background: linear-gradient(135deg, #131c1a, #182522, #0e1815); }
+.bg-b4 { background: linear-gradient(135deg, #1a1520, #231a2e, #130f18); }
+.bg-b5 { background: linear-gradient(135deg, #1a1815, #2a2218, #13110e); }
+.bg-b6 { background: linear-gradient(135deg, #151a1a, #1a2520, #0e1815); }
+
+/* Shimmer animation */
+@keyframes shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+.shimmer {
+  background: linear-gradient(90deg, transparent, var(--g), transparent);
+  background-size: 200% 100%;
+  animation: shimmer 5s ease-in-out infinite;
+}
+
+/* Glitch */
+@keyframes glitch {
+  0%,93%,100% { clip-path: none; transform: none; }
+  94% { clip-path: inset(22% 0 48% 0); transform: translateX(-5px); }
+  96% { clip-path: inset(58% 0 12% 0); transform: translateX(5px); }
+  98% { clip-path: inset(8% 0 62% 0); transform: translateX(-3px); }
+}
+.animate-glitch { animation: glitch 14s 7s infinite; }
+
+/* Stamp */
+@keyframes stampSlam {
+  0%   { opacity: 0; transform: rotate(-18deg) scale(.4); }
+  55%  { transform: rotate(4deg) scale(1.1); }
+  80%  { transform: rotate(-2deg) scale(.96); }
+  100% { opacity: 1; transform: rotate(-8deg) scale(1); }
+}
+.stamp-slam { animation: stampSlam .62s cubic-bezier(.36,.07,.19,.97) forwards; }
+
+/* Contenteditable */
+[contenteditable="true"]:hover { background: rgba(201,168,76,.065); border-radius: 2px; }
+[contenteditable="true"]:focus { background: rgba(201,168,76,.1); outline: none; border-radius: 2px; box-shadow: 0 0 0 1px rgba(201,168,76,.2); }
+
+/* Chibi float */
+@keyframes chibiFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+.chibi-float { animation: chibiFloat 4.2s ease-in-out infinite; }
+
+/* Toast */
+@keyframes toastIn {
+  0% { opacity: 0; transform: translateX(-50%) translateY(8px); }
+  20% { opacity: 1; transform: translateX(-50%) translateY(0); }
+  80% { opacity: 1; }
+  100% { opacity: 0; }
+}
+.toast-animate { animation: toastIn 2.6s ease forwards; }
+
+/* Dot glow */
+@keyframes dotGlow {
+  0%,100% { box-shadow: 0 0 5px rgba(201,168,76,.4); }
+  50%      { box-shadow: 0 0 14px rgba(201,168,76,.75); }
+}
+.dot-glow { animation: dotGlow 3s ease-in-out infinite; }
+
+/* confetti */
+@keyframes confettiFall {
+  to { transform: translateY(110vh) rotate(720deg); opacity: 0; }
+}
+
+/* Progress bar pulse */
+@keyframes progPulse { 0%,100% { opacity: 0.7; } 50% { opacity: 1; } }
+.prog-pulse { animation: progPulse 3s ease-in-out infinite; }
