@@ -8,7 +8,6 @@ import dynamic from 'next/dynamic';
 import IntroScreen from '@/components/holo/IntroScreen';
 import SlideEngine from '@/components/slides/SlideEngine';
 import Toolbar from '@/components/slides/Toolbar';
-import ChatPanel from '@/components/chat/ChatPanel';
 import StatsPanel from '@/components/stats/StatsPanel';
 import Toast from '@/components/ui/Toast';
 
@@ -95,7 +94,6 @@ export default function Home() {
           </div>
         </div>
       )}
-      <ChatPanel/>
       <StatsPanel/>
     </>
   );
