@@ -2,7 +2,6 @@
 import { motion } from 'framer-motion';
 import { useDossier } from '@/store';
 import { CONFIG } from '@/lib/config';
-import Chibi from '../chibi/Chibi';
 
 interface Props { isActive: boolean; }
 
@@ -43,15 +42,7 @@ export default function CoverSlide({ isActive }: Props) {
         <line x1="0" y1="964" x2="1920" y2="964" stroke="#C9A84C" strokeWidth="0.7" opacity="0.05"/>
       </svg>
 
-      {/* 4 corner decorations */}
-      <div style={{ position:'absolute', top:24, left:24, width:36, height:36, pointerEvents:'none',
-        borderTop:'1.5px solid rgba(201,168,76,0.35)', borderLeft:'1.5px solid rgba(201,168,76,0.35)' }}/>
-      <div style={{ position:'absolute', top:24, right:24, width:36, height:36, pointerEvents:'none',
-        borderTop:'1.5px solid rgba(201,168,76,0.35)', borderRight:'1.5px solid rgba(201,168,76,0.35)' }}/>
-      <div style={{ position:'absolute', bottom:24, left:24, width:36, height:36, pointerEvents:'none',
-        borderBottom:'1.5px solid rgba(201,168,76,0.35)', borderLeft:'1.5px solid rgba(201,168,76,0.35)' }}/>
-      <div style={{ position:'absolute', bottom:24, right:24, width:36, height:36, pointerEvents:'none',
-        borderBottom:'1.5px solid rgba(201,168,76,0.35)', borderRight:'1.5px solid rgba(201,168,76,0.35)' }}/>
+
 
       {/* Badge */}
       <motion.div initial={{scale:0.8,opacity:0}} animate={{opacity:1,scale:1}} transition={{delay:0.2}}
@@ -102,8 +93,6 @@ export default function CoverSlide({ isActive }: Props) {
         ))}
       </motion.div>
 
-      {/* Chibi — fixed bottom-right inside the 1920×1080 slide */}
-      <Chibi type="wand" visible={isActive}/>
     </div>
   );
 }
