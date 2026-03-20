@@ -4,7 +4,6 @@ import { motion, useInView } from 'framer-motion';
 import { useRef } from 'react';
 import { useDossier } from '@/store';
 import { CONFIG } from '@/lib/config';
-import Chibi from '../chibi/Chibi';
 import Counter from '../ui/Counter';
 import RadarChart from '../ui/RadarChart';
 
@@ -80,15 +79,7 @@ export default function ChapterSlide({ slide, isActive }: { slide:any; isActive:
       <div style={{ position:'absolute', inset:0, pointerEvents:'none', zIndex:1,
         backgroundImage:'repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,0.022) 3px,rgba(0,0,0,0.022) 4px)' }}/>
 
-      {/* Corner decorations — pixel-perfect positioning */}
-      <div style={{ position:'absolute', top:24, left:24, width:36, height:36, pointerEvents:'none', zIndex:5,
-        borderTop:'1.5px solid rgba(201,168,76,0.35)', borderLeft:'1.5px solid rgba(201,168,76,0.35)' }}/>
-      <div style={{ position:'absolute', top:24, right:24, width:36, height:36, pointerEvents:'none', zIndex:5,
-        borderTop:'1.5px solid rgba(201,168,76,0.35)', borderRight:'1.5px solid rgba(201,168,76,0.35)' }}/>
-      <div style={{ position:'absolute', bottom:24, left:24, width:36, height:36, pointerEvents:'none', zIndex:5,
-        borderBottom:'1.5px solid rgba(201,168,76,0.35)', borderLeft:'1.5px solid rgba(201,168,76,0.35)' }}/>
-      <div style={{ position:'absolute', bottom:24, right:24, width:36, height:36, pointerEvents:'none', zIndex:5,
-        borderBottom:'1.5px solid rgba(201,168,76,0.35)', borderRight:'1.5px solid rgba(201,168,76,0.35)' }}/>
+
 
       {/* Header */}
       <div style={{ position:'relative', zIndex:3, height:185, display:'flex', flexDirection:'column', justifyContent:'center', padding:'0 100px', borderBottom:'1px solid rgba(201,168,76,0.1)' }}>
@@ -116,7 +107,6 @@ export default function ChapterSlide({ slide, isActive }: { slide:any; isActive:
         {slide.id === 'custom'     && <CustomContent c={c} editable={editable} id={slide.id}/>}
       </div>
 
-      <Chibi type={slide.chibi} visible={isActive}/>
     </div>
   );
 }
