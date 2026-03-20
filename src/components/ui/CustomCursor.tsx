@@ -12,6 +12,9 @@ export default function CustomCursor() {
     let d2x = -200, d2y = -200;
     let af: number;
 
+    // Only hide native cursor once custom cursor is active
+    document.body.classList.add('custom-cursor-ready');
+
     const onMove = (e: MouseEvent) => { mx = e.clientX; my = e.clientY; };
     const onDown = () => cursorRef.current?.style.setProperty('opacity','0.6');
     const onUp   = () => cursorRef.current?.style.setProperty('opacity','1');
