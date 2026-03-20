@@ -42,14 +42,29 @@ export default function Toolbar({ totalSlides, onAddPage, onRemovePage, onExport
   });
 
   const arrBtn = {
-    border: '1px solid rgba(201,168,76,0.2)',
-    background: 'rgba(201,168,76,0.04)',
-    color: 'rgba(201,168,76,0.7)',
-    borderRadius: 2, width: 32, height: 32,
-    cursor: 'pointer', fontSize: 14,
+    border: '1px solid rgba(201,168,76,0.22)',
+    background: 'rgba(201,168,76,0.05)',
+    color: 'rgba(201,168,76,0.75)',
+    borderRadius: 3,
+    width: 30, height: 30,
+    cursor: 'pointer',
     display: 'flex', alignItems: 'center', justifyContent: 'center',
-    transition: 'all .2s',
+    transition: 'all .15s',
+    fontSize: 13,
+    fontWeight: 700,
   };
+
+  // SVG arrows like in the screenshot
+  const ArrowLeft = () => (
+    <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+      <path d="M8 2.5L4 6.5L8 10.5" stroke="rgba(201,168,76,0.8)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+  const ArrowRight = () => (
+    <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+      <path d="M5 2.5L9 6.5L5 10.5" stroke="rgba(201,168,76,0.8)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
 
   return (
     <div style={{
@@ -61,8 +76,8 @@ export default function Toolbar({ totalSlides, onAddPage, onRemovePage, onExport
       backdropFilter: 'blur(12px)',
     }}>
       {/* Navigation */}
-      <button style={arrBtn} onClick={() => setSlide(Math.max(0, currentSlide-1))}>◀</button>
-      <button style={arrBtn} onClick={() => setSlide(Math.min(totalSlides-1, currentSlide+1))}>▶</button>
+      <button style={arrBtn} onClick={() => setSlide(Math.max(0, currentSlide-1))}><ArrowLeft/></button>
+      <button style={arrBtn} onClick={() => setSlide(Math.min(totalSlides-1, currentSlide+1))}><ArrowRight/></button>
 
       <span style={{ fontFamily:'Cinzel,serif', fontSize:12, color:'#C9A84C', letterSpacing:2, minWidth:130, whiteSpace:'nowrap' }}>
         {label} — {currentSlide+1}/{totalSlides}
