@@ -2,90 +2,67 @@
 import { useEffect, useRef } from 'react';
 
 export default function CustomCursor() {
-  const cursorRef  = useRef<SVGSVGElement>(null);
-  const trailRef   = useRef<HTMLDivElement>(null);
-  const trail2Ref  = useRef<HTMLDivElement>(null);
+  const cursorRef = useRef<SVGSVGElement>(null);
+  const dot1Ref   = useRef<HTMLDivElement>(null);
+  const dot2Ref   = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    let mx = -100, my = -100;
-    let t1x = -100, t1y = -100;
-    let t2x = -100, t2y = -100;
+    let mx = -200, my = -200;
+    let d1x = -200, d1y = -200;
+    let d2x = -200, d2y = -200;
     let af: number;
 
-    const move = (e: MouseEvent) => { mx = e.clientX; my = e.clientY; };
-    const down = () => cursorRef.current?.classList.add('scale-75');
-    const up   = () => cursorRef.current?.classList.remove('scale-75');
+    const onMove = (e: MouseEvent) => { mx = e.clientX; my = e.clientY; };
+    const onDown = () => cursorRef.current?.style.setProperty('opacity','0.6');
+    const onUp   = () => cursorRef.current?.style.setProperty('opacity','1');
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('mouseup',   onUp);
 
-    document.addEventListener('mousemove', move);
-    document.addEventListener('mousedown', down);
-    document.addEventListener('mouseup',   up);
-
-    const loop = () => {
-      // Curseur principal — suit instantanément
+    const tick = () => {
+      // Curseur principal — instantané
       if (cursorRef.current) {
         cursorRef.current.style.left = mx + 'px';
         cursorRef.current.style.top  = my + 'px';
       }
-      // Trail 1 — suit avec 22% d'inertie (très rapide)
-      t1x += (mx - t1x) * 0.22;
-      t1y += (my - t1y) * 0.22;
-      if (trailRef.current) {
-        trailRef.current.style.left = t1x + 'px';
-        trailRef.current.style.top  = t1y + 'px';
+      // Trail rapide — 30% par frame
+      d1x += (mx - d1x) * 0.30;
+      d1y += (my - d1y) * 0.30;
+      if (dot1Ref.current) {
+        dot1Ref.current.style.left = d1x + 'px';
+        dot1Ref.current.style.top  = d1y + 'px';
       }
-      // Trail 2 — suit avec 12% d'inertie (légèrement plus lent)
-      t2x += (mx - t2x) * 0.12;
-      t2y += (my - t2y) * 0.12;
-      if (trail2Ref.current) {
-        trail2Ref.current.style.left = t2x + 'px';
-        trail2Ref.current.style.top  = t2y + 'px';
+      // Trail lent — 16% par frame
+      d2x += (mx - d2x) * 0.16;
+      d2y += (my - d2y) * 0.16;
+      if (dot2Ref.current) {
+        dot2Ref.current.style.left = d2x + 'px';
+        dot2Ref.current.style.top  = d2y + 'px';
       }
-      af = requestAnimationFrame(loop);
+      af = requestAnimationFrame(tick);
     };
-    af = requestAnimationFrame(loop);
-
+    af = requestAnimationFrame(tick);
     return () => {
-      document.removeEventListener('mousemove', move);
-      document.removeEventListener('mousedown', down);
-      document.removeEventListener('mouseup',   up);
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('mouseup', onUp);
       cancelAnimationFrame(af);
     };
   }, []);
 
+  const base: React.CSSProperties = { position:'fixed', pointerEvents:'none', zIndex:99999, transform:'translate(-50%,-50%)' };
   return (
     <>
-      {/* Curseur crosshair principal — instantané */}
-      <svg
-        ref={cursorRef}
-        width="22" height="22" viewBox="0 0 22 22"
-        className="scale-100 transition-transform duration-75"
-        style={{ position:'fixed', pointerEvents:'none', zIndex:99999, transform:'translate(-50%,-50%)' }}
-      >
-        <line x1="11" y1="0"  x2="11" y2="8"  stroke="#C9A84C" strokeWidth="1.2" opacity="0.9"/>
-        <line x1="11" y1="14" x2="11" y2="22" stroke="#C9A84C" strokeWidth="1.2" opacity="0.9"/>
-        <line x1="0"  y1="11" x2="8"  y2="11" stroke="#C9A84C" strokeWidth="1.2" opacity="0.9"/>
-        <line x1="14" y1="11" x2="22" y2="11" stroke="#C9A84C" strokeWidth="1.2" opacity="0.9"/>
-        <circle cx="11" cy="11" r="2.8" fill="none" stroke="#C9A84C" strokeWidth="1.2" opacity="0.8"/>
-        <circle cx="11" cy="11" r="0.9" fill="#C9A84C"/>
+      <svg ref={cursorRef} width="22" height="22" viewBox="0 0 22 22" style={{ ...base, zIndex:99999 }}>
+        <line x1="11" y1="0"  x2="11" y2="7"  stroke="#C9A84C" strokeWidth="1.2" opacity="0.9"/>
+        <line x1="11" y1="15" x2="11" y2="22" stroke="#C9A84C" strokeWidth="1.2" opacity="0.9"/>
+        <line x1="0"  y1="11" x2="7"  y2="11" stroke="#C9A84C" strokeWidth="1.2" opacity="0.9"/>
+        <line x1="15" y1="11" x2="22" y2="11" stroke="#C9A84C" strokeWidth="1.2" opacity="0.9"/>
+        <circle cx="11" cy="11" r="3" fill="none" stroke="#C9A84C" strokeWidth="1.2" opacity="0.75"/>
+        <circle cx="11" cy="11" r="1" fill="#C9A84C"/>
       </svg>
-
-      {/* Trail 1 — point doré rapide */}
-      <div ref={trailRef} style={{
-        position:'fixed', pointerEvents:'none', zIndex:99997,
-        width:7, height:7, borderRadius:'50%',
-        background:'rgba(201,168,76,0.55)',
-        transform:'translate(-50%,-50%)',
-        boxShadow:'0 0 6px rgba(201,168,76,0.4)',
-      }}/>
-
-      {/* Trail 2 — point plus grand et plus lent */}
-      <div ref={trail2Ref} style={{
-        position:'fixed', pointerEvents:'none', zIndex:99996,
-        width:12, height:12, borderRadius:'50%',
-        background:'rgba(201,168,76,0.12)',
-        border:'1px solid rgba(201,168,76,0.25)',
-        transform:'translate(-50%,-50%)',
-      }}/>
+      <div ref={dot1Ref} style={{ ...base, zIndex:99997, width:7, height:7, borderRadius:'50%', background:'rgba(201,168,76,0.6)', boxShadow:'0 0 6px rgba(201,168,76,0.5)' }}/>
+      <div ref={dot2Ref} style={{ ...base, zIndex:99996, width:14, height:14, borderRadius:'50%', background:'transparent', border:'1px solid rgba(201,168,76,0.22)' }}/>
     </>
   );
 }
