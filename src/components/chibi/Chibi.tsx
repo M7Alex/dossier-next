@@ -29,7 +29,7 @@ export default function Chibi({ type, visible }: ChibiProps) {
     <AnimatePresence>
       {visible && (
         <motion.div
-          style={{ position:'absolute', bottom:16, right:16, width:150, height:190, pointerEvents:'none', zIndex:20 }}
+          style={{ position:'absolute', bottom:0, right:12, width:160, height:195, pointerEvents:'none', zIndex:20 }}
           initial={{ opacity: 0, x: 40, scale: 0.7 }}
           animate={{ opacity: 1, x: 0, scale: 1 }}
           exit={{ opacity: 0, x: 30, scale: 0.8 }}
