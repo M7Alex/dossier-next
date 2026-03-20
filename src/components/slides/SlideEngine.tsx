@@ -6,6 +6,7 @@ import { CONFIG } from '@/lib/config';
 import CoverSlide from './CoverSlide';
 import ChapterSlide from './ChapterSlide';
 import ParticlesBg from '../ui/ParticlesBg';
+import Chibi from '../chibi/Chibi';
 import { audio } from '@/lib/audio';
 import { toast } from 'sonner';
 
@@ -15,7 +16,6 @@ const VARIANTS = {
   exit:  (d: number) => ({ opacity: 0, x: d > 0 ? -60 : 60 }),
 };
 
-// Bg colors per slide for the full-bleed backdrop
 const SLIDE_BG: Record<string, string> = {
   cover:      'linear-gradient(160deg,#0D1117 0%,#141B24 45%,#1a2235 75%,#0D1117)',
   intro:      'linear-gradient(135deg,#141B24,#1a2535,#0f1620)',
@@ -31,6 +31,11 @@ const BG_TYPE: Record<string, string> = {
   systemes:'matrix', leadership:'pulse', conclusion:'flow', cover:'particles',
 };
 
+const CHIBI_TYPE: Record<string, string> = {
+  cover:'wand', intro:'pointer', parcours:'scroll', vision:'telescope',
+  systemes:'calculator', leadership:'clipboard', conclusion:'trophy',
+};
+
 export default function SlideEngine() {
   const { currentSlide, setSlide, showWatermark, content, extraPages } = useDossier();
   const [dir, setDir] = useState(0);
@@ -40,7 +45,6 @@ export default function SlideEngine() {
   const allSlides = [...CONFIG.slides, ...extraPages];
   const total = allSlides.length;
 
-  // ── CONTAIN — rien n'est jamais coupé ──
   useEffect(() => {
     const calc = () => {
       if (!containerRef.current) return;
@@ -101,25 +105,71 @@ export default function SlideEngine() {
   const slideId = (slide as any)?.id || 'cover';
   const bgGradient = SLIDE_BG[slideId] || SLIDE_BG.cover;
   const bgType = (BG_TYPE[slideId] || 'particles') as any;
+  const chibiType = (slide as any)?.chibi || CHIBI_TYPE[slideId] || 'pointer';
 
   return (
     <div ref={containerRef} style={{ width:'100%', height:'100%', position:'relative', overflow:'hidden' }}>
 
-      {/* ── FULL-BLEED BACKGROUND ── covers the entire viewport behind the slide */}
+      {/* ── LAYER 0: Full-bleed background — covers 100% of screen ── */}
       <AnimatePresence mode="wait">
         <motion.div key={`bg-${currentSlide}`}
           initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }}
-          transition={{ duration:0.28 }}
+          transition={{ duration:0.3 }}
           style={{ position:'absolute', inset:0, zIndex:0, background: bgGradient }}>
           <ParticlesBg type={bgType}/>
         </motion.div>
       </AnimatePresence>
 
-      {/* ── SLIDE — scaled with contain, centered ── */}
+      {/* ── LAYER 1: Screen-level UI — always at true screen edges ── */}
+
+      {/* 4 corners — at actual screen edges */}
+      <div style={{ position:'absolute', top:12, left:12, width:40, height:40, zIndex:30, pointerEvents:'none',
+        borderTop:'1.5px solid rgba(201,168,76,0.4)', borderLeft:'1.5px solid rgba(201,168,76,0.4)' }}/>
+      <div style={{ position:'absolute', top:12, right:12, width:40, height:40, zIndex:30, pointerEvents:'none',
+        borderTop:'1.5px solid rgba(201,168,76,0.4)', borderRight:'1.5px solid rgba(201,168,76,0.4)' }}/>
+      <div style={{ position:'absolute', bottom:12, left:12, width:40, height:40, zIndex:30, pointerEvents:'none',
+        borderBottom:'1.5px solid rgba(201,168,76,0.4)', borderLeft:'1.5px solid rgba(201,168,76,0.4)' }}/>
+      <div style={{ position:'absolute', bottom:12, right:12, width:40, height:40, zIndex:30, pointerEvents:'none',
+        borderBottom:'1.5px solid rgba(201,168,76,0.4)', borderRight:'1.5px solid rgba(201,168,76,0.4)' }}/>
+
+      {/* Scan line */}
+      <div style={{ position:'absolute', left:0, right:0, height:2, zIndex:30, pointerEvents:'none',
+        background:'linear-gradient(90deg,transparent,rgba(201,168,76,0.08),transparent)',
+        animation:'scan 6s linear infinite' }}/>
+
+      {/* Progress bar — full screen width */}
+      <motion.div style={{
+        position:'absolute', bottom:0, left:0, zIndex:30, height:3,
+        background:'linear-gradient(90deg,#8B6914,#C9A84C,#E8C97A)',
+        boxShadow:'0 0 10px rgba(201,168,76,0.5)',
+      }}
+        animate={{ width:`${((currentSlide+1)/total)*100}%` }}
+        transition={{ duration:0.4, ease:'easeInOut' }}
+      />
+
+      {/* Chibi — at true screen bottom-right */}
+      <div style={{ position:'absolute', bottom:0, right:16, zIndex:30, pointerEvents:'none' }}>
+        <Chibi type={chibiType} visible={true}/>
+      </div>
+
+      {/* Watermark */}
+      <AnimatePresence>
+        {showWatermark && (
+          <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+            style={{ position:'absolute', inset:0, zIndex:28, display:'flex', alignItems:'center', justifyContent:'center', pointerEvents:'none' }}>
+            <div style={{ fontFamily:'Cinzel,serif', fontWeight:700, fontSize:'12vw', color:'rgba(192,57,43,0.1)', transform:'rotate(-35deg)', letterSpacing:20, textTransform:'uppercase', userSelect:'none' }}>
+              CONFIDENTIEL
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── LAYER 2: Scaled slide content — no decorative elements inside ── */}
       <div style={{
-        position: 'absolute', inset: 0,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        zIndex: 1,
+        position:'absolute', inset:0,
+        display:'flex', alignItems:'center', justifyContent:'center',
+        zIndex:10,
+        pointerEvents:'none', // let events pass through to buttons in slides
       }}>
         <div style={{
           width: 1920, height: 1080,
@@ -127,28 +177,8 @@ export default function SlideEngine() {
           transformOrigin: 'center center',
           flexShrink: 0,
           position: 'relative',
+          pointerEvents: 'auto',
         }}>
-          {/* Progress bar */}
-          <motion.div style={{
-            position:'absolute', bottom:0, left:0, zIndex:50, height:3,
-            background:'linear-gradient(90deg,#8B6914,#C9A84C,#E8C97A)',
-            boxShadow:'0 0 8px rgba(201,168,76,0.6)',
-          }}
-            animate={{ width:`${((currentSlide+1)/total)*100}%` }}
-            transition={{ duration:0.4, ease:'easeInOut' }}
-          />
-          {/* Watermark */}
-          <AnimatePresence>
-            {showWatermark && (
-              <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
-                style={{ position:'absolute', inset:0, zIndex:40, display:'flex', alignItems:'center', justifyContent:'center', pointerEvents:'none' }}>
-                <div style={{ fontFamily:'Cinzel,serif', fontWeight:700, fontSize:180, color:'rgba(192,57,43,0.1)', transform:'rotate(-35deg)', letterSpacing:20, textTransform:'uppercase', userSelect:'none' }}>
-                  CONFIDENTIEL
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-          {/* Slides */}
           <AnimatePresence custom={dir} mode="wait">
             <motion.div key={currentSlide} custom={dir} variants={VARIANTS}
               initial="enter" animate="center" exit="exit"
