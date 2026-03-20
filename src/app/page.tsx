@@ -122,7 +122,7 @@ export default function Home() {
 
       {/* Main app */}
       {mode !== 'locked' && (
-        <div className="flex flex-col h-screen overflow-hidden" style={{ background:'#050810' }}>
+        <div className="flex flex-col" style={{ height:'100dvh', background:'#050810', overflow:'hidden' }}>
           <Toolbar
             totalSlides={totalSlides}
             onAddPage={handleAddPage}
@@ -130,7 +130,7 @@ export default function Home() {
             onExport={handleExport}
             onShare={handleShare}
           />
-          <div className="flex-1 overflow-hidden relative">
+          <div className="flex-1 overflow-hidden flex items-center justify-center">
             <SlideEngine/>
           </div>
         </div>
