@@ -90,9 +90,7 @@ export default function ChapterSlide({ slide, isActive }: { slide:any; isActive:
   return (
     <div style={{ position:'absolute', inset:0, overflow:'hidden', background:'transparent' }}>
 
-      {/* Scan lines overlay */}
-      <div style={{ position:'absolute', inset:0, pointerEvents:'none', zIndex:1,
-        backgroundImage:'repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,0.022) 3px,rgba(0,0,0,0.022) 4px)' }}/>
+
 
 
 
