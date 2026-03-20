@@ -74,16 +74,19 @@ export default function ChapterSlide({ slide, isActive }: { slide:any; isActive:
   const rawTitle = (content[`h${slide.numero}`] || c.titre).replace(/<[^>]*>/g,'');
   const { out: twTitle, done: twDone } = useTypewriter(rawTitle, isActive);
 
-  const bgColors: Record<string,string> = {
-    b1:'rgba(201,168,76,', b2:'rgba(80,200,200,',
-    b3:'rgba(80,160,120,', b4:'rgba(160,80,200,',
-    b5:'rgba(200,140,80,', b6:'rgba(80,200,160,',
+  const bgTypeMap: Record<string,string> = {
+    'intro':      'particles',
+    'parcours':   'waves',
+    'vision':     'constellation',
+    'systemes':   'matrix',
+    'leadership': 'pulse',
+    'conclusion': 'flow',
   };
-  const particleColor = bgColors[slide.bg] || 'rgba(201,168,76,';
+  const bgType = bgTypeMap[slide.id] || 'particles';
 
   return (
     <div className={`absolute inset-0 bg-${slide.bg} overflow-hidden`} style={{ position:'relative' }}>
-      <ParticlesBg color={particleColor} density={28} speed={0.3}/>
+      <ParticlesBg type={bgType as any}/>
 
       {/* Scan lines overlay */}
       <div style={{ position:'absolute', inset:0, pointerEvents:'none', zIndex:1,
