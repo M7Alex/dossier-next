@@ -5,7 +5,6 @@ import { useRef } from 'react';
 import { useDossier } from '@/store';
 import { CONFIG } from '@/lib/config';
 import Chibi from '../chibi/Chibi';
-import ParticlesBg from '../ui/ParticlesBg';
 import Counter from '../ui/Counter';
 import RadarChart from '../ui/RadarChart';
 
@@ -74,29 +73,22 @@ export default function ChapterSlide({ slide, isActive }: { slide:any; isActive:
   const rawTitle = (content[`h${slide.numero}`] || c.titre).replace(/<[^>]*>/g,'');
   const { out: twTitle, done: twDone } = useTypewriter(rawTitle, isActive);
 
-  const bgTypeMap: Record<string,string> = {
-    'intro':      'particles',
-    'parcours':   'waves',
-    'vision':     'constellation',
-    'systemes':   'matrix',
-    'leadership': 'pulse',
-    'conclusion': 'flow',
-  };
-  const bgType = bgTypeMap[slide.id] || 'particles';
-
   return (
-    <div className={`absolute inset-0 bg-${slide.bg} overflow-hidden`} style={{ position:'relative' }}>
-      <ParticlesBg type={bgType as any}/>
+    <div style={{ position:'absolute', inset:0, overflow:'hidden', background:'transparent' }}>
 
       {/* Scan lines overlay */}
       <div style={{ position:'absolute', inset:0, pointerEvents:'none', zIndex:1,
         backgroundImage:'repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,0.022) 3px,rgba(0,0,0,0.022) 4px)' }}/>
 
-      {/* Corner decorations */}
-      {[['top-4 left-4','top left'],['top-4 right-4','top right'],['bottom-4 left-4','bottom left'],['bottom-4 right-4','bottom right']].map(([cls],i)=>(
-        <div key={i} className={`absolute ${cls} w-8 h-8 pointer-events-none`}
-          style={{ border:'1px solid rgba(201,168,76,0.15)', zIndex:2 }}/>
-      ))}
+      {/* Corner decorations — pixel-perfect positioning */}
+      <div style={{ position:'absolute', top:24, left:24, width:36, height:36, pointerEvents:'none', zIndex:5,
+        borderTop:'1.5px solid rgba(201,168,76,0.35)', borderLeft:'1.5px solid rgba(201,168,76,0.35)' }}/>
+      <div style={{ position:'absolute', top:24, right:24, width:36, height:36, pointerEvents:'none', zIndex:5,
+        borderTop:'1.5px solid rgba(201,168,76,0.35)', borderRight:'1.5px solid rgba(201,168,76,0.35)' }}/>
+      <div style={{ position:'absolute', bottom:24, left:24, width:36, height:36, pointerEvents:'none', zIndex:5,
+        borderBottom:'1.5px solid rgba(201,168,76,0.35)', borderLeft:'1.5px solid rgba(201,168,76,0.35)' }}/>
+      <div style={{ position:'absolute', bottom:24, right:24, width:36, height:36, pointerEvents:'none', zIndex:5,
+        borderBottom:'1.5px solid rgba(201,168,76,0.35)', borderRight:'1.5px solid rgba(201,168,76,0.35)' }}/>
 
       {/* Header */}
       <div style={{ position:'relative', zIndex:3, height:185, display:'flex', flexDirection:'column', justifyContent:'center', padding:'0 100px', borderBottom:'1px solid rgba(201,168,76,0.1)' }}>
