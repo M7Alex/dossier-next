@@ -55,7 +55,7 @@ export default function CoverSlide({ isActive }: Props) {
       </motion.div>
 
       <motion.div initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} transition={{delay:0.3}}
-        contentEditable={editable} suppressContentEditableWarning onInput={set('c0')}
+        contentEditable={editable} suppressContentEditableWarning onBlur={set('c0')}
         style={{ fontFamily:'Cinzel,serif', fontSize:13, letterSpacing:6, textTransform:'uppercase',
           marginBottom:14, zIndex:2, position:'relative', color:'#8B6914',
           outline:'none' }}
@@ -63,7 +63,7 @@ export default function CoverSlide({ isActive }: Props) {
       />
 
       <motion.h1 initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} transition={{delay:0.4}}
-        contentEditable={editable} suppressContentEditableWarning onInput={set('c1')}
+        contentEditable={editable} suppressContentEditableWarning onBlur={set('c1')}
         style={{ fontFamily:'Cinzel,serif', fontSize:70, fontWeight:700, textTransform:'uppercase',
           letterSpacing:4, textAlign:'center', zIndex:2, position:'relative',
           color:'#C9A84C', textShadow:'0 4px 30px rgba(201,168,76,0.2)',
@@ -72,7 +72,7 @@ export default function CoverSlide({ isActive }: Props) {
       />
 
       <motion.div initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} transition={{delay:0.5}}
-        contentEditable={editable} suppressContentEditableWarning onInput={set('c2')}
+        contentEditable={editable} suppressContentEditableWarning onBlur={set('c2')}
         style={{ fontSize:16, letterSpacing:5, textTransform:'uppercase', zIndex:2, position:'relative',
           marginBottom:36, marginTop:10, color:'#A89878', outline:'none' }}
         dangerouslySetInnerHTML={{ __html: get('c2', CONFIG.candidat.poste) }}
@@ -86,7 +86,7 @@ export default function CoverSlide({ isActive }: Props) {
         {([['c3','Candidat',CONFIG.candidat.nomComplet],['c4','Poste visé','Head of Consulting'],['c5','Département',CONFIG.candidat.departement.split('—')[0].trim()],['c6','Date',CONFIG.candidat.annee]] as [string,string,string][]).map(([k,lbl,def])=>(
           <div key={k} style={{ textAlign:'center' }}>
             <div style={{ fontFamily:'Share Tech Mono,monospace', fontSize:10, letterSpacing:3, textTransform:'uppercase', marginBottom:6, color:'#8B6914' }}>{lbl}</div>
-            <div contentEditable={editable} suppressContentEditableWarning onInput={set(k)}
+            <div contentEditable={editable} suppressContentEditableWarning onBlur={set(k)}
               style={{ fontFamily:'Cinzel,serif', fontSize:15, fontWeight:600, color:'#F0E8D0', outline:'none' }}
               dangerouslySetInnerHTML={{ __html: get(k, def) }}/>
           </div>
