@@ -17,19 +17,23 @@ const VARIANTS = {
 export default function SlideEngine() {
   const { currentSlide, setSlide, mode, showWatermark, content, extraPages } = useDossier();
   const [dir, setDir] = useState(0);
-  const [prev, setPrev] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
 
   const allSlides = [...CONFIG.slides, ...extraPages];
   const total = allSlides.length;
 
-  // Rescale 1920×1080 to container
+  // Responsive scale — fit inside available space (width AND height)
   useEffect(() => {
     const resize = () => {
       if (!containerRef.current) return;
-      const w = containerRef.current.offsetWidth;
-      setScale(w / 1920);
+      const W = containerRef.current.offsetWidth;
+      // Available height = window minus toolbar (~48px)
+      const H = window.innerHeight - 48;
+      const scaleW = W / 1920;
+      const scaleH = H / 1080;
+      // Use the smaller scale so the slide always fits without cropping
+      setScale(Math.min(scaleW, scaleH));
     };
     resize();
     window.addEventListener('resize', resize);
@@ -99,8 +103,15 @@ export default function SlideEngine() {
   const slide = allSlides[currentSlide];
 
   return (
-    <div ref={containerRef} className="w-full relative overflow-hidden" style={{ height: Math.round(1080 * scale) }}>
-      <div style={{ width: 1920, height: 1080, transform: `scale(${scale})`, transformOrigin: 'top left', position: 'relative' }}>
+    <div ref={containerRef} className="w-full flex items-center justify-center overflow-hidden"
+      style={{ height: Math.round(1080 * scale), background: '#050810' }}>
+      <div style={{
+        width: 1920, height: 1080,
+        transform: `scale(${scale})`,
+        transformOrigin: 'top left',
+        position: 'relative',
+        flexShrink: 0,
+      }}>
 
         {/* Progress bar */}
         <motion.div
