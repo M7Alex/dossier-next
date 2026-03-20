@@ -17,8 +17,8 @@ html, body { height: 100%; background: #050810; overflow: hidden; }
 ::-webkit-scrollbar-track { background: rgba(201,168,76,.04); }
 ::-webkit-scrollbar-thumb { background: rgba(201,168,76,.28); border-radius: 2px; }
 
-/* Custom cursor */
-*, *::before, *::after { cursor: none !important; }
+/* Custom cursor — only hide native cursor when custom cursor is active */
+body.custom-cursor-ready *, body.custom-cursor-ready *::before, body.custom-cursor-ready *::after { cursor: none !important; }
 #custom-cursor {
   position: fixed; width: 20px; height: 20px; pointer-events: none;
   z-index: 99999; transform: translate(-50%, -50%);
