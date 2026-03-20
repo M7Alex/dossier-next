@@ -18,20 +18,21 @@ export default function SlideEngine() {
   const { currentSlide, setSlide, showWatermark, content, extraPages } = useDossier();
   const [dir, setDir] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(1);
+  const [dims, setDims] = useState({ scale: 1, W: 1920, H: 1080 });
 
   const allSlides = [...CONFIG.slides, ...extraPages];
   const total = allSlides.length;
 
-  // Scale so the slide fills the container completely (cover mode)
-  // but text stays readable by using contain when on small screens
+  // ── COVER scaling ──
+  // Le slide remplit TOUT l'espace — comme background-size:cover
+  // On prend le max des deux ratios pour qu'il n'y ait aucune bande noire
   useEffect(() => {
     const calc = () => {
       if (!containerRef.current) return;
       const W = containerRef.current.offsetWidth;
       const H = containerRef.current.offsetHeight;
-      // Use contain so nothing gets cropped
-      setScale(Math.min(W / 1920, H / 1080));
+      const scale = Math.max(W / 1920, H / 1080);
+      setDims({ scale, W, H });
     };
     calc();
     const ro = new ResizeObserver(calc);
@@ -83,29 +84,42 @@ export default function SlideEngine() {
   }, [content, extraPages]);
 
   const slide = allSlides[currentSlide];
+  const { scale } = dims;
+
+  // Offset pour centrer le slide scalé dans le container
+  const offsetX = (dims.W - 1920 * scale) / 2;
+  const offsetY = (dims.H - 1080 * scale) / 2;
 
   return (
-    // Container fills ALL available space
-    <div ref={containerRef} style={{ width:'100%', height:'100%', position:'relative', background:'#050810', overflow:'hidden', display:'flex', alignItems:'center', justifyContent:'center' }}>
-
-      {/* Slide at native 1920×1080, scaled to fit */}
+    <div ref={containerRef} style={{
+      width: '100%', height: '100%',
+      position: 'relative',
+      background: '#050810',
+      overflow: 'hidden', // cache le débordement en mode cover
+    }}>
+      {/* Slide natif 1920×1080 — scalé et centré */}
       <div style={{
-        width: 1920, height: 1080,
+        width: 1920,
+        height: 1080,
         transform: `scale(${scale})`,
-        transformOrigin: 'center center',
-        position: 'relative',
-        flexShrink: 0,
+        transformOrigin: 'top left',
+        position: 'absolute',
+        top: offsetY,
+        left: offsetX,
       }}>
         {/* Progress bar */}
-        <motion.div style={{ position:'absolute', bottom:0, left:0, zIndex:50, height:3,
-          background:'linear-gradient(90deg,#8B6914,#C9A84C,#E8C97A)', boxShadow:'0 0 8px rgba(201,168,76,0.6)' }}
-          animate={{ width:`${((currentSlide+1)/total)*100}%` }}
-          transition={{ duration:0.4, ease:'easeInOut' }}
+        <motion.div style={{
+          position: 'absolute', bottom: 0, left: 0, zIndex: 50, height: 3,
+          background: 'linear-gradient(90deg,#8B6914,#C9A84C,#E8C97A)',
+          boxShadow: '0 0 8px rgba(201,168,76,0.6)',
+        }}
+          animate={{ width: `${((currentSlide + 1) / total) * 100}%` }}
+          transition={{ duration: 0.4, ease: 'easeInOut' }}
         />
         {/* Watermark */}
         <AnimatePresence>
           {showWatermark && (
-            <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+            <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }}
               style={{ position:'absolute', inset:0, zIndex:40, display:'flex', alignItems:'center', justifyContent:'center', pointerEvents:'none' }}>
               <div style={{ fontFamily:'Cinzel,serif', fontWeight:700, fontSize:180, color:'rgba(192,57,43,0.1)', transform:'rotate(-35deg)', letterSpacing:20, textTransform:'uppercase', userSelect:'none' }}>
                 CONFIDENTIEL
@@ -117,16 +131,13 @@ export default function SlideEngine() {
         <AnimatePresence custom={dir} mode="wait">
           <motion.div key={currentSlide} custom={dir} variants={VARIANTS}
             initial="enter" animate="center" exit="exit"
-            transition={{ duration:0.28, ease:[0.22,1,0.36,1] }}
-            style={{ position:'absolute', inset:0 }}>
-            {slide?.type === 'cover' && <CoverSlide isActive={true}/>}
-            {(slide?.type === 'chapter' || slide?.type === 'custom') && <ChapterSlide slide={slide} isActive={true}/>}
+            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+            style={{ position: 'absolute', inset: 0 }}>
+            {slide?.type === 'cover' && <CoverSlide isActive={true} />}
+            {(slide?.type === 'chapter' || slide?.type === 'custom') && <ChapterSlide slide={slide} isActive={true} />}
           </motion.div>
         </AnimatePresence>
       </div>
-
-      {/* Black letterbox areas — fill with matching bg so no ugly bars */}
-      <div style={{ position:'absolute', inset:0, zIndex:-1, background:'#050810' }}/>
     </div>
   );
 }
