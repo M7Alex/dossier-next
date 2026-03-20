@@ -23,18 +23,18 @@ export default function SlideEngine() {
   const allSlides = [...CONFIG.slides, ...extraPages];
   const total = allSlides.length;
 
-  // ── CONTAIN scaling — le slide tient TOUJOURS entièrement dans l'écran ──
+  // Scale so the slide fills the container completely (cover mode)
+  // but text stays readable by using contain when on small screens
   useEffect(() => {
-    const resize = () => {
+    const calc = () => {
       if (!containerRef.current) return;
       const W = containerRef.current.offsetWidth;
       const H = containerRef.current.offsetHeight;
-      // contain: prend le min pour que tout rentre sans couper
-      const s = Math.min(W / 1920, H / 1080);
-      setScale(s);
+      // Use contain so nothing gets cropped
+      setScale(Math.min(W / 1920, H / 1080));
     };
-    resize();
-    const ro = new ResizeObserver(resize);
+    calc();
+    const ro = new ResizeObserver(calc);
     if (containerRef.current) ro.observe(containerRef.current);
     return () => ro.disconnect();
   }, []);
@@ -54,7 +54,7 @@ export default function SlideEngine() {
       if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')   go(currentSlide - 1);
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
-        fetch('/api/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content, extraPages }) })
+        fetch('/api/save', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ content, extraPages }) })
           .then(() => toast.success('✦ Sauvegardé')).catch(() => toast.error('Erreur'));
       }
     };
@@ -77,52 +77,56 @@ export default function SlideEngine() {
   useEffect(() => {
     if (typeof window === 'undefined' || window.location.protocol === 'file:') return;
     const t = setTimeout(() =>
-      fetch('/api/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content, extraPages }) }).catch(() => {})
+      fetch('/api/save', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ content, extraPages }) }).catch(() => {})
     , 800);
     return () => clearTimeout(t);
   }, [content, extraPages]);
 
   const slide = allSlides[currentSlide];
-  const sw = Math.round(1920 * scale);
-  const sh = Math.round(1080 * scale);
 
   return (
-    <div ref={containerRef} className="w-full flex-1 flex items-center justify-center overflow-hidden"
-      style={{ background: '#050810', minHeight: 0 }}>
-      {/* Wrapper exact size du slide scalé */}
-      <div style={{ width: sw, height: sh, position: 'relative', flexShrink: 0 }}>
-        {/* Le slide natif 1920×1080 scaled */}
-        <div style={{ width: 1920, height: 1080, transform: `scale(${scale})`, transformOrigin: 'top left', position: 'absolute', top: 0, left: 0 }}>
-          {/* Progress bar */}
-          <motion.div className="absolute bottom-0 left-0 z-50"
-            style={{ height: 3, background: 'linear-gradient(90deg,#8B6914,#C9A84C,#E8C97A)', boxShadow: '0 0 8px rgba(201,168,76,0.6)' }}
-            animate={{ width: `${((currentSlide + 1) / total) * 100}%` }}
-            transition={{ duration: 0.4, ease: 'easeInOut' }}
-          />
-          {/* Watermark */}
-          <AnimatePresence>
-            {showWatermark && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                className="absolute inset-0 z-40 flex items-center justify-center pointer-events-none">
-                <div className="font-cinzel font-bold select-none"
-                  style={{ fontSize: 180, color: 'rgba(192,57,43,0.1)', transform: 'rotate(-35deg)', letterSpacing: 20, textTransform: 'uppercase' }}>
-                  CONFIDENTIEL
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-          {/* Slides */}
-          <AnimatePresence custom={dir} mode="wait">
-            <motion.div key={currentSlide} custom={dir} variants={VARIANTS}
-              initial="enter" animate="center" exit="exit"
-              transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-              className="absolute inset-0">
-              {slide?.type === 'cover'                            && <CoverSlide isActive={true} />}
-              {(slide?.type === 'chapter' || slide?.type === 'custom') && <ChapterSlide slide={slide} isActive={true} />}
+    // Container fills ALL available space
+    <div ref={containerRef} style={{ width:'100%', height:'100%', position:'relative', background:'#050810', overflow:'hidden', display:'flex', alignItems:'center', justifyContent:'center' }}>
+
+      {/* Slide at native 1920×1080, scaled to fit */}
+      <div style={{
+        width: 1920, height: 1080,
+        transform: `scale(${scale})`,
+        transformOrigin: 'center center',
+        position: 'relative',
+        flexShrink: 0,
+      }}>
+        {/* Progress bar */}
+        <motion.div style={{ position:'absolute', bottom:0, left:0, zIndex:50, height:3,
+          background:'linear-gradient(90deg,#8B6914,#C9A84C,#E8C97A)', boxShadow:'0 0 8px rgba(201,168,76,0.6)' }}
+          animate={{ width:`${((currentSlide+1)/total)*100}%` }}
+          transition={{ duration:0.4, ease:'easeInOut' }}
+        />
+        {/* Watermark */}
+        <AnimatePresence>
+          {showWatermark && (
+            <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+              style={{ position:'absolute', inset:0, zIndex:40, display:'flex', alignItems:'center', justifyContent:'center', pointerEvents:'none' }}>
+              <div style={{ fontFamily:'Cinzel,serif', fontWeight:700, fontSize:180, color:'rgba(192,57,43,0.1)', transform:'rotate(-35deg)', letterSpacing:20, textTransform:'uppercase', userSelect:'none' }}>
+                CONFIDENTIEL
+              </div>
             </motion.div>
-          </AnimatePresence>
-        </div>
+          )}
+        </AnimatePresence>
+        {/* Slides */}
+        <AnimatePresence custom={dir} mode="wait">
+          <motion.div key={currentSlide} custom={dir} variants={VARIANTS}
+            initial="enter" animate="center" exit="exit"
+            transition={{ duration:0.28, ease:[0.22,1,0.36,1] }}
+            style={{ position:'absolute', inset:0 }}>
+            {slide?.type === 'cover' && <CoverSlide isActive={true}/>}
+            {(slide?.type === 'chapter' || slide?.type === 'custom') && <ChapterSlide slide={slide} isActive={true}/>}
+          </motion.div>
+        </AnimatePresence>
       </div>
+
+      {/* Black letterbox areas — fill with matching bg so no ugly bars */}
+      <div style={{ position:'absolute', inset:0, zIndex:-1, background:'#050810' }}/>
     </div>
   );
 }
