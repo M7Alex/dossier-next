@@ -9,9 +9,9 @@ import { audio } from '@/lib/audio';
 import { toast } from 'sonner';
 
 const VARIANTS = {
-  enter: (dir: number) => ({ opacity: 0, x: dir > 0 ? 60 : -60 }),
+  enter: (d: number) => ({ opacity: 0, x: d > 0 ? 60 : -60 }),
   center: { opacity: 1, x: 0 },
-  exit:  (dir: number) => ({ opacity: 0, x: dir > 0 ? -60 : 60 }),
+  exit:  (d: number) => ({ opacity: 0, x: d > 0 ? -60 : 60 }),
 };
 
 export default function SlideEngine() {
@@ -23,17 +23,15 @@ export default function SlideEngine() {
   const allSlides = [...CONFIG.slides, ...extraPages];
   const total = allSlides.length;
 
-  // ── Responsive scale — remplit toujours tout l'espace disponible ──
+  // ── CONTAIN scaling — le slide tient TOUJOURS entièrement dans l'écran ──
   useEffect(() => {
     const resize = () => {
       if (!containerRef.current) return;
       const W = containerRef.current.offsetWidth;
       const H = containerRef.current.offsetHeight;
-      const scaleW = W / 1920;
-      const scaleH = H / 1080;
-      // On prend le plus grand des deux pour couvrir tout l'espace (comme background-size: cover)
-      // mais on plafonne à 1 pour ne jamais agrandir au-delà du natif
-      setScale(Math.max(scaleW, scaleH));
+      // contain: prend le min pour que tout rentre sans couper
+      const s = Math.min(W / 1920, H / 1080);
+      setScale(s);
     };
     resize();
     const ro = new ResizeObserver(resize);
@@ -48,105 +46,82 @@ export default function SlideEngine() {
     setSlide(i);
   }, [currentSlide, total, setSlide]);
 
-  // Keyboard
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      const active = document.activeElement as HTMLElement;
-      if (active?.contentEditable === 'true') return;
+    const h = (e: KeyboardEvent) => {
+      const el = document.activeElement as HTMLElement;
+      if (el?.contentEditable === 'true') return;
       if (e.key === 'ArrowRight' || e.key === 'ArrowDown') go(currentSlide + 1);
       if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')   go(currentSlide - 1);
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
-        fetch('/api/save', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ content, extraPages }) })
-          .then(() => toast.success('✦ Sauvegardé'))
-          .catch(() => toast.error('Erreur de sauvegarde'));
+        fetch('/api/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content, extraPages }) })
+          .then(() => toast.success('✦ Sauvegardé')).catch(() => toast.error('Erreur'));
       }
     };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
   }, [currentSlide, go, content, extraPages]);
 
-  // Swipe
   useEffect(() => {
     let sx = 0, sy = 0;
     const ts = (e: TouchEvent) => { sx = e.touches[0].clientX; sy = e.touches[0].clientY; };
     const te = (e: TouchEvent) => {
-      const dx = e.changedTouches[0].clientX - sx;
-      const dy = e.changedTouches[0].clientY - sy;
-      if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) dx < 0 ? go(currentSlide+1) : go(currentSlide-1);
+      const dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy;
+      if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) dx < 0 ? go(currentSlide + 1) : go(currentSlide - 1);
     };
-    window.addEventListener('touchstart', ts, { passive:true });
-    window.addEventListener('touchend',   te, { passive:true });
+    window.addEventListener('touchstart', ts, { passive: true });
+    window.addEventListener('touchend',   te, { passive: true });
     return () => { window.removeEventListener('touchstart', ts); window.removeEventListener('touchend', te); };
   }, [currentSlide, go]);
 
-  // Auto-save
   useEffect(() => {
     if (typeof window === 'undefined' || window.location.protocol === 'file:') return;
-    const tid = setTimeout(() => {
-      fetch('/api/save', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ content, extraPages }) }).catch(()=>{});
-    }, 800);
-    return () => clearTimeout(tid);
+    const t = setTimeout(() =>
+      fetch('/api/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content, extraPages }) }).catch(() => {})
+    , 800);
+    return () => clearTimeout(t);
   }, [content, extraPages]);
 
   const slide = allSlides[currentSlide];
+  const sw = Math.round(1920 * scale);
+  const sh = Math.round(1080 * scale);
 
   return (
-    <div
-      ref={containerRef}
-      className="w-full flex-1 relative overflow-hidden"
-      style={{ background:'#050810', minHeight: 0 }}
-    >
-      {/* Slide — centré, toujours couvre tout l'espace */}
-      <div style={{
-        width: 1920,
-        height: 1080,
-        transform: `scale(${scale})`,
-        transformOrigin: 'top left',
-        position: 'absolute',
-        // Centrage horizontal si le slide est plus étroit que le conteneur
-        left: '50%',
-        top: '50%',
-        marginLeft: -1920 * scale / 2,
-        marginTop: -1080 * scale / 2,
-      }}>
-        {/* Progress bar */}
-        <motion.div
-          className="absolute bottom-0 left-0 z-50"
-          style={{ height:3, background:'linear-gradient(90deg,#8B6914,#C9A84C,#E8C97A)', boxShadow:'0 0 8px rgba(201,168,76,0.5)', opacity:0.85 }}
-          animate={{ width:`${((currentSlide+1)/total)*100}%` }}
-          transition={{ duration:0.4, ease:'easeInOut' }}
-        />
-
-        {/* Watermark */}
-        <AnimatePresence>
-          {showWatermark && (
-            <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
-              className="absolute inset-0 z-40 flex items-center justify-center pointer-events-none">
-              <div className="font-cinzel font-bold select-none"
-                style={{fontSize:180,color:'rgba(192,57,43,0.1)',transform:'rotate(-35deg)',letterSpacing:20,textTransform:'uppercase'}}>
-                CONFIDENTIEL
-              </div>
+    <div ref={containerRef} className="w-full flex-1 flex items-center justify-center overflow-hidden"
+      style={{ background: '#050810', minHeight: 0 }}>
+      {/* Wrapper exact size du slide scalé */}
+      <div style={{ width: sw, height: sh, position: 'relative', flexShrink: 0 }}>
+        {/* Le slide natif 1920×1080 scaled */}
+        <div style={{ width: 1920, height: 1080, transform: `scale(${scale})`, transformOrigin: 'top left', position: 'absolute', top: 0, left: 0 }}>
+          {/* Progress bar */}
+          <motion.div className="absolute bottom-0 left-0 z-50"
+            style={{ height: 3, background: 'linear-gradient(90deg,#8B6914,#C9A84C,#E8C97A)', boxShadow: '0 0 8px rgba(201,168,76,0.6)' }}
+            animate={{ width: `${((currentSlide + 1) / total) * 100}%` }}
+            transition={{ duration: 0.4, ease: 'easeInOut' }}
+          />
+          {/* Watermark */}
+          <AnimatePresence>
+            {showWatermark && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                className="absolute inset-0 z-40 flex items-center justify-center pointer-events-none">
+                <div className="font-cinzel font-bold select-none"
+                  style={{ fontSize: 180, color: 'rgba(192,57,43,0.1)', transform: 'rotate(-35deg)', letterSpacing: 20, textTransform: 'uppercase' }}>
+                  CONFIDENTIEL
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+          {/* Slides */}
+          <AnimatePresence custom={dir} mode="wait">
+            <motion.div key={currentSlide} custom={dir} variants={VARIANTS}
+              initial="enter" animate="center" exit="exit"
+              transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+              className="absolute inset-0">
+              {slide?.type === 'cover'                            && <CoverSlide isActive={true} />}
+              {(slide?.type === 'chapter' || slide?.type === 'custom') && <ChapterSlide slide={slide} isActive={true} />}
             </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Slides */}
-        <AnimatePresence custom={dir} mode="wait">
-          <motion.div
-            key={currentSlide}
-            custom={dir}
-            variants={VARIANTS}
-            initial="enter"
-            animate="center"
-            exit="exit"
-            transition={{ duration:0.28, ease:[0.22,1,0.36,1] }}
-            className="absolute inset-0"
-          >
-            {slide?.type === 'cover'   && <CoverSlide isActive={true}/>}
-            {(slide?.type === 'chapter' || slide?.type === 'custom') && <ChapterSlide slide={slide} isActive={true}/>}
-          </motion.div>
-        </AnimatePresence>
+          </AnimatePresence>
+        </div>
       </div>
     </div>
   );
