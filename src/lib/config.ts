@@ -87,7 +87,6 @@ export const CONFIG = {
         signataire: "Alex Stark · Chef du Pôle Conseil d'Entreprises",
       },
     },
-  ,
     {
       id: "legacy", type: "legacy" as const, label: "Legacy",
       numero: "VII", icon: "★", bg: "b1", chibi: "trophy",
