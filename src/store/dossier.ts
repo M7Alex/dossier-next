@@ -47,7 +47,7 @@ export const useDossier = create<DossierState>()(
       toggleWatermark: () => set((s) => ({ showWatermark: !s.showWatermark })),
     }),
     {
-      name: 'dossier-rp-v5',
+      name: 'dossier-rp-v6',
       partialize: (s) => ({ content: s.content, extraPages: s.extraPages }),
     }
   )
