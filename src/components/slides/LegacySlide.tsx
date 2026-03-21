@@ -11,19 +11,44 @@ let _legacyAudio: HTMLAudioElement | null = null;
 function playLegacyTheme(targetVol = 0.7) {
   try {
     if (_legacyAudio) { _legacyAudio.pause(); _legacyAudio = null; }
-    const audio = new Audio('/legacy_theme.mp3');
+    
+    // Try /public/legacy_theme.mp3 then fallback paths
+    const paths = ['/legacy_theme.mp3', '/public/legacy_theme.mp3'];
+    const audio = new Audio(paths[0]);
     audio.volume = 0;
     _legacyAudio = audio;
-    audio.play().catch(() => {});
-    // Very smooth fade in over 8s (matches audio file fade)
-    let vol = 0;
-    const step = targetVol / 80; // 80 steps over ~8s
-    const fadeIn = setInterval(() => {
-      vol = Math.min(vol + step, targetVol);
-      audio.volume = vol;
-      if (vol >= targetVol) clearInterval(fadeIn);
-    }, 100);
-    // Audio has built-in fade out at 88s
+    
+    const startFade = () => {
+      let vol = 0;
+      const step = targetVol / 80;
+      const fadeIn = setInterval(() => {
+        vol = Math.min(vol + step, targetVol);
+        if (_legacyAudio) _legacyAudio.volume = vol;
+        if (vol >= targetVol) clearInterval(fadeIn);
+      }, 100);
+    };
+    
+    audio.addEventListener('canplaythrough', startFade, { once: true });
+    audio.addEventListener('error', (e) => {
+      console.warn('Legacy audio load error:', e);
+      // Try fallback path
+      if (_legacyAudio) {
+        _legacyAudio.src = paths[1];
+        _legacyAudio.load();
+        _legacyAudio.play().catch(() => {});
+      }
+    }, { once: true });
+    
+    audio.load();
+    audio.play().catch(() => {
+      // Autoplay blocked — will play on next interaction
+      document.addEventListener('click', () => {
+        if (_legacyAudio && _legacyAudio.paused) {
+          _legacyAudio.play().catch(() => {});
+        }
+      }, { once: true });
+    });
+    
     return audio;
   } catch (e) { console.warn('Audio error', e); }
 }
