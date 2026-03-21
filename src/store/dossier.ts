@@ -51,8 +51,8 @@ export const useDossier = create<DossierState>()(
       toggleWatermark: () => set((s) => ({ showWatermark: !s.showWatermark })),
     }),
     {
-      name: 'dossier-rp-v7',
-      partialize: (s) => ({ content: s.content, extraPages: s.extraPages, volumeLevel: s.volumeLevel }),
+      name: 'dossier-rp-v8',
+      partialize: (s) => ({ content: s.content, extraPages: [], volumeLevel: s.volumeLevel }), // extraPages never persisted
     }
   )
 );
