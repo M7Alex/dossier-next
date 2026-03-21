@@ -20,14 +20,65 @@ function launchConfetti() {
   }
 }
 
-// ────────────────────────────────────────────────────────
-// GLOBE CANVAS — Animation planétaire réseau financier
-// Inspiré du GIF : globe numérique avec connexions
-// ────────────────────────────────────────────────────────
-function GlobeCanvas({ opacity = 1, scale = 1 }: { opacity?: number; scale?: number }) {
+// ─────────────────────────────────────────────────────────
+// DESSIN AIGLE (fonction standalone, bezier holographique)
+// ─────────────────────────────────────────────────────────
+function strokeEagle(ctx: CanvasRenderingContext2D, s: number) {
+  // Corps principal
+  ctx.beginPath();
+  // Aile gauche — top
+  ctx.moveTo(-s*1.08, s*0.07);
+  ctx.bezierCurveTo(-s*0.80, -s*0.13, -s*0.46, -s*0.21, -s*0.20, -s*0.07);
+  // Vers le cou
+  ctx.bezierCurveTo(-s*0.10, -s*0.02, -s*0.04, s*0.02, 0, s*0.04);
+  // Aile droite — top
+  ctx.bezierCurveTo(s*0.04, s*0.02, s*0.10, -s*0.02, s*0.20, -s*0.07);
+  ctx.bezierCurveTo(s*0.46, -s*0.21, s*0.80, -s*0.13, s*1.08, s*0.07);
+  // Aile droite — bottom
+  ctx.bezierCurveTo(s*0.80, s*0.19, s*0.50, s*0.17, s*0.20, s*0.11);
+  // Corps bas
+  ctx.bezierCurveTo(s*0.10, s*0.15, s*0.06, s*0.22, s*0.05, s*0.30);
+  // Queue droite
+  ctx.lineTo(s*0.16, s*0.46);
+  ctx.lineTo(0, s*0.36);
+  // Queue gauche
+  ctx.lineTo(-s*0.16, s*0.46);
+  ctx.lineTo(-s*0.05, s*0.30);
+  // Corps bas gauche
+  ctx.bezierCurveTo(-s*0.06, s*0.22, -s*0.10, s*0.15, -s*0.20, s*0.11);
+  // Aile gauche — bottom
+  ctx.bezierCurveTo(-s*0.50, s*0.17, -s*0.80, s*0.19, -s*1.08, s*0.07);
+  ctx.stroke();
+  // Tête
+  ctx.beginPath();
+  ctx.arc(s*0.10, -s*0.23, s*0.10, 0, Math.PI*2);
+  ctx.stroke();
+  // Bec
+  ctx.beginPath();
+  ctx.moveTo(s*0.20, -s*0.22);
+  ctx.lineTo(s*0.31, -s*0.18);
+  ctx.lineTo(s*0.20, -s*0.14);
+  ctx.stroke();
+  // Cou
+  ctx.beginPath();
+  ctx.moveTo(s*0.04, -s*0.14);
+  ctx.quadraticCurveTo(s*0.02, -s*0.05, 0, s*0.04);
+  ctx.stroke();
+}
+
+// ─────────────────────────────────────────────────────────
+// GLOBE + AIGLE UNIFIÉ — animation de constitution 3D
+// ─────────────────────────────────────────────────────────
+function GlobeEagleCanvas({
+  phase, onEagleDone,
+}: {
+  phase: Phase;
+  onEagleDone: () => void;
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const animRef = useRef<number>(0);
-  const angleRef = useRef(0);
+  const animRef   = useRef<number>(0);
+  const startRef  = useRef<number>(0);
+  const doneRef   = useRef(false);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -36,676 +87,555 @@ function GlobeCanvas({ opacity = 1, scale = 1 }: { opacity?: number; scale?: num
     if (!ctx) return;
 
     const resize = () => {
-      canvas.width = window.innerWidth;
+      canvas.width  = window.innerWidth;
       canvas.height = window.innerHeight;
     };
     resize();
     window.addEventListener('resize', resize);
+    startRef.current = performance.now();
+    doneRef.current  = false;
 
-    // Génération des points sur la sphère (Fibonacci lattice)
-    const N = 220;
-    const goldenRatio = (1 + Math.sqrt(5)) / 2;
-    type SpherePoint = { lat: number; lon: number; size: number; isHub: boolean };
-    const spherePoints: SpherePoint[] = Array.from({ length: N }, (_, i) => ({
-      lat: Math.acos(1 - 2 * (i + 0.5) / N),
-      lon: 2 * Math.PI * i / goldenRatio,
-      size: Math.random() < 0.08 ? 3.5 : Math.random() < 0.2 ? 2 : 1.2,
-      isHub: Math.random() < 0.08,
+    // ── Paramètres globe (Fibonacci lattice) ──
+    const N  = 200;
+    const GR = (1 + Math.sqrt(5)) / 2;
+    type SP  = { lat:number; lon:number; size:number; hub:boolean };
+    const pts: SP[] = Array.from({ length: N }, (_, i) => ({
+      lat:  Math.acos(1 - 2*(i+0.5)/N),
+      lon:  2*Math.PI*i/GR,
+      size: Math.random() < 0.08 ? 3.2 : Math.random() < 0.22 ? 1.9 : 1.0,
+      hub:  Math.random() < 0.08,
     }));
 
-    // Points "villes" hubs (nœuds financiers)
-    const hubIndices = spherePoints
-      .map((p, i) => ({ p, i }))
-      .filter(x => x.p.isHub)
-      .map(x => x.i);
+    let globeAngle = 0;
+    // Eagle path reveal — longueur totale approximative
+    const EAGLE_DASH_LEN = 8000;
 
-    const draw = () => {
-      const W = canvas.width;
-      const H = canvas.height;
-      ctx.clearRect(0, 0, W, H);
+    // ease
+    const eO  = (t:number) => 1 - Math.pow(1-t, 3);
+    const eIO = (t:number) => t<0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2,3)/2;
+    const c01 = (v:number, a:number, b:number) => Math.max(0, Math.min(1, (v-a)/(b-a)));
 
-      angleRef.current += 0.004;
-      const angle = angleRef.current;
-
-      const cx = W / 2;
-      const cy = H / 2;
-      const R = Math.min(W, H) * 0.30;
-
-      // Projection 3D → 2D
-      type Proj = { px: number; py: number; z: number; vis: number; idx: number; isHub: boolean; size: number };
-      const proj: Proj[] = spherePoints.map((p, idx) => {
-        const cosLat = Math.sin(p.lat);
-        const sinLat = Math.cos(p.lat);
-        const x = cosLat * Math.cos(p.lon + angle);
-        const z = cosLat * Math.sin(p.lon + angle);
-        const y = sinLat;
-        // Légère inclinaison de l'axe (23.5° comme la Terre)
-        const tilt = 0.41;
-        const yt = y * Math.cos(tilt) - z * Math.sin(tilt);
-        const zt = y * Math.sin(tilt) + z * Math.cos(tilt);
-        return {
-          px: cx + x * R,
-          py: cy - yt * R,
-          z: zt,
-          vis: (zt + 1) / 2,
-          idx, isHub: p.isHub, size: p.size,
-        };
-      });
-
-      // Trier back→front
-      proj.sort((a, b) => a.z - b.z);
-
-      // ── Cercle globe (hémisphère sombre) ──
-      const grad = ctx.createRadialGradient(cx - R*0.2, cy - R*0.2, R*0.1, cx, cy, R*1.1);
-      grad.addColorStop(0, 'rgba(10,20,45,0.0)');
-      grad.addColorStop(0.6, 'rgba(5,12,28,0.0)');
-      grad.addColorStop(1, 'rgba(0,8,20,0.0)');
+    // ── Halo doux (sans bord dur) ──
+    const softGlow = (
+      rcx:number, rcy:number, r0:number, r1:number,
+      R:number, G:number, B:number, maxA:number
+    ) => {
+      const g = ctx.createRadialGradient(rcx,rcy,r0, rcx,rcy,r1);
+      g.addColorStop(0,   `rgba(${R},${G},${B},0)`);
+      g.addColorStop(0.45,`rgba(${R},${G},${B},${maxA*0.45})`);
+      g.addColorStop(0.75,`rgba(${R},${G},${B},${maxA*0.18})`);
+      g.addColorStop(1,   `rgba(${R},${G},${B},0)`);
       ctx.beginPath();
-      ctx.arc(cx, cy, R, 0, Math.PI*2);
-      ctx.fillStyle = grad;
+      ctx.arc(rcx, rcy, r1, 0, Math.PI*2);
+      ctx.fillStyle = g;
       ctx.fill();
+    };
 
-      // ── Lignes de latitude/longitude (grille sphérique) ──
-      ctx.globalAlpha = 0.07;
+    const draw = (now: number) => {
+      const W  = canvas.width;
+      const H  = canvas.height;
+      const cx = W/2, cy = H/2;
+      const R  = Math.min(W,H) * 0.285;
+      const elapsed = now - startRef.current;
+      const TOTAL   = phase==='eagle' ? 6200 : 99999999;
+      const t       = elapsed / TOTAL; // 0→1
+
+      ctx.clearRect(0,0,W,H);
+      globeAngle += 0.003;
+      const ga = globeAngle;
+      const tilt = 0.30;
+
+      // Projeter un point 3D sphère → 2D canvas
+      const proj = (lat:number, lon:number) => {
+        const cL = Math.sin(lat), sL = Math.cos(lat);
+        const x3 = cL*Math.cos(lon+ga);
+        const z3 = cL*Math.sin(lon+ga);
+        const y3 = sL;
+        const y2 = y3*Math.cos(tilt) - z3*Math.sin(tilt);
+        const z2 = y3*Math.sin(tilt) + z3*Math.cos(tilt);
+        return { px: cx + x3*R, py: cy - y2*R, z: z2, vis:(z2+1)/2 };
+      };
+
+      // ── Timeline (pendant phase eagle uniquement) ──
+      const globeP  = eO(c01(t, 0,    0.42));  // 0→0.42 globe build
+      const gridP   = eO(c01(t, 0.02, 0.40));  // grid draw
+      const eagleP  = eO(c01(t, 0.12, 0.52));  // 0.12→0.52 aigle se forme
+      const moveP   = eIO(c01(t, 0.38, 0.70)); // 0.38→0.70 aigle se déplace
+      const mergeP  = eIO(c01(t, 0.62, 0.88)); // 0.62→0.88 fusion
+      const holdP   = eO(c01(t,  0.88, 1.0));  // hold final
+
+      // Opacité globe (toujours visible, plus discret en pad)
+      const globeAlpha = phase==='eagle' ? globeP : 0.85;
+      const eagleAlpha = phase==='eagle' ? Math.max(0, eagleP * (1 - mergeP*0.95)) : 0;
+
+      // ── 1. Halos atmosphériques DOUX ──
+      softGlow(cx,cy, R*0.15, R*2.4, 30,150,200, 0.11*globeAlpha);
+      softGlow(cx,cy, 0, R*1.2, 60,120,200, 0.07*globeAlpha);
+      // Halo doré (apparaît pendant fusion aigle)
+      if (phase==='eagle' && mergeP > 0) {
+        softGlow(cx,cy, R*0.2, R*1.8, 201,168,76, 0.10*mergeP);
+      }
+
+      // ── 2. Grille lat/lon (se dessine progressivement) ──
+      ctx.globalAlpha = 0.055 * (phase==='eagle' ? gridP : 1);
       ctx.strokeStyle = '#50C8C8';
-      ctx.lineWidth = 0.5;
-      for (let lat = -80; lat <= 80; lat += 20) {
+      ctx.lineWidth   = 0.45;
+      const drawLine = (latDeg:number, fixedLon:boolean) => {
         ctx.beginPath();
         let first = true;
-        for (let lonD = 0; lonD <= 360; lonD += 3) {
-          const lonR = (lonD * Math.PI / 180) + angle;
-          const latR = lat * Math.PI / 180;
-          const cosLat = Math.cos(latR);
-          const x = cosLat * Math.cos(lonR);
-          const z = cosLat * Math.sin(lonR);
-          const y = Math.sin(latR);
-          const tilt = 0.41;
-          const yt = y * Math.cos(tilt) - z * Math.sin(tilt);
-          const zt = y * Math.sin(tilt) + z * Math.cos(tilt);
-          if (zt < -0.05) { first = true; continue; }
-          const px = cx + x * R, py = cy - yt * R;
-          if (first) { ctx.moveTo(px, py); first = false; } else ctx.lineTo(px, py);
+        const maxAngle = 360 * (phase==='eagle' ? gridP : 1);
+        for (let a=0; a<=maxAngle; a+=2) {
+          const la = fixedLon ? a * Math.PI/180 - Math.PI/2 : latDeg * Math.PI/180;
+          const lo = fixedLon ? latDeg * Math.PI/180 : a * Math.PI/180;
+          const {px,py,z} = proj(la, lo);
+          if (z < -0.04) { first=true; continue; }
+          if (first) { ctx.moveTo(px,py); first=false; } else ctx.lineTo(px,py);
         }
         ctx.stroke();
-      }
-      for (let lonD = 0; lonD < 360; lonD += 20) {
-        ctx.beginPath();
-        let first = true;
-        for (let latD = -90; latD <= 90; latD += 3) {
-          const lonR = (lonD * Math.PI / 180) + angle;
-          const latR = latD * Math.PI / 180;
-          const cosLat = Math.cos(latR);
-          const x = cosLat * Math.cos(lonR);
-          const z = cosLat * Math.sin(lonR);
-          const y = Math.sin(latR);
-          const tilt = 0.41;
-          const yt = y * Math.cos(tilt) - z * Math.sin(tilt);
-          const zt = y * Math.sin(tilt) + z * Math.cos(tilt);
-          if (zt < -0.05) { first = true; continue; }
-          const px = cx + x * R, py = cy - yt * R;
-          if (first) { ctx.moveTo(px, py); first = false; } else ctx.lineTo(px, py);
-        }
-        ctx.stroke();
-      }
+      };
+      for (let lat=-80;lat<=80;lat+=20) drawLine(lat, false);
+      for (let lon=0;lon<360;lon+=20) drawLine(lon, true);
       ctx.globalAlpha = 1;
 
-      // ── Connexions entre hubs financiers ──
-      const visHubs = proj.filter(p => p.isHub && p.z > -0.1);
-      for (let i = 0; i < visHubs.length; i++) {
-        for (let j = i+1; j < visHubs.length; j++) {
-          const a = visHubs[i], b = visHubs[j];
-          const dist = Math.hypot(a.px - b.px, a.py - b.py);
-          if (dist < R * 0.75) {
-            const alpha = Math.min(a.vis, b.vis) * 0.55 * (1 - dist/(R*0.75));
-            // Ligne gold pour les hubs
-            const lineGrad = ctx.createLinearGradient(a.px, a.py, b.px, b.py);
-            lineGrad.addColorStop(0, `rgba(201,168,76,${alpha})`);
-            lineGrad.addColorStop(0.5, `rgba(80,200,200,${alpha * 0.8})`);
-            lineGrad.addColorStop(1, `rgba(201,168,76,${alpha})`);
-            ctx.beginPath();
-            ctx.strokeStyle = lineGrad;
-            ctx.lineWidth = 0.8;
-            ctx.moveTo(a.px, a.py);
-            ctx.lineTo(b.px, b.py);
-            ctx.stroke();
-
-            // Particule animée sur la ligne
-            const t = ((Date.now() / 1500) + i * 0.3 + j * 0.17) % 1;
-            const mx = a.px + (b.px - a.px) * t;
-            const my = a.py + (b.py - a.py) * t;
-            ctx.beginPath();
-            ctx.arc(mx, my, 1.5, 0, Math.PI*2);
-            ctx.fillStyle = `rgba(201,168,76,${alpha * 1.5})`;
-            ctx.shadowColor = '#C9A84C';
-            ctx.shadowBlur = 6;
-            ctx.fill();
-            ctx.shadowBlur = 0;
-          }
-        }
+      // ── 3. Points + connexions ──
+      const visible = Math.floor(N * (phase==='eagle' ? globeP : 1));
+      type PP = { px:number;py:number;z:number;vis:number;hub:boolean;size:number };
+      const pps: PP[] = [];
+      for (let i=0;i<visible;i++) {
+        const p   = pts[i];
+        const {px,py,z,vis} = proj(p.lat,p.lon);
+        pps.push({px,py,z,vis,hub:p.hub,size:p.size});
       }
+      pps.sort((a,b)=>a.z-b.z);
 
-      // ── Connexions réseau normaux ──
-      for (let i = 0; i < proj.length; i++) {
-        const a = proj[i];
-        if (a.z < 0) continue;
-        for (let j = i+1; j < proj.length; j++) {
-          const b = proj[j];
-          if (b.z < 0) continue;
-          const dist = Math.hypot(a.px - b.px, a.py - b.py);
-          const maxDist = R * 0.28;
-          if (dist < maxDist) {
-            const alpha = Math.min(a.vis, b.vis) * 0.28 * (1 - dist/maxDist);
+      // Connexions normales
+      for (let i=0;i<pps.length;i++) {
+        const a=pps[i]; if(a.z<0) continue;
+        for (let j=i+1;j<pps.length;j++) {
+          const b=pps[j]; if(b.z<0) continue;
+          const d=Math.hypot(a.px-b.px,a.py-b.py);
+          const md=R*0.25;
+          if (d<md) {
+            const al=Math.min(a.vis,b.vis)*0.22*(1-d/md)*globeAlpha;
             ctx.beginPath();
-            ctx.strokeStyle = `rgba(80,200,200,${alpha})`;
-            ctx.lineWidth = 0.4;
-            ctx.moveTo(a.px, a.py);
-            ctx.lineTo(b.px, b.py);
+            ctx.strokeStyle=`rgba(80,200,200,${al})`;
+            ctx.lineWidth=0.4;
+            ctx.moveTo(a.px,a.py); ctx.lineTo(b.px,b.py);
             ctx.stroke();
           }
         }
       }
 
-      // ── Points ──
-      for (const p of proj) {
-        if (p.z < -0.15) continue;
-        const alpha = p.vis;
-        if (p.isHub) {
-          // Hub — point doré avec halo
-          const haloSize = p.size * (2.5 + Math.sin(Date.now()/800 + p.idx) * 0.8);
+      // Connexions hubs (dorées + particule animée)
+      const hubs = pps.filter(p=>p.hub&&p.z>0);
+      for (let i=0;i<hubs.length;i++) {
+        for (let j=i+1;j<hubs.length;j++) {
+          const a=hubs[i],b=hubs[j];
+          const d=Math.hypot(a.px-b.px,a.py-b.py);
+          if (d<R*0.62) {
+            const al=Math.min(a.vis,b.vis)*0.45*(1-d/(R*0.62))*globeAlpha*(0.5+mergeP*0.5);
+            const lg=ctx.createLinearGradient(a.px,a.py,b.px,b.py);
+            lg.addColorStop(0,`rgba(201,168,76,${al})`);
+            lg.addColorStop(.5,`rgba(80,200,200,${al*0.7})`);
+            lg.addColorStop(1,`rgba(201,168,76,${al})`);
+            ctx.beginPath(); ctx.strokeStyle=lg; ctx.lineWidth=0.9;
+            ctx.moveTo(a.px,a.py); ctx.lineTo(b.px,b.py); ctx.stroke();
+            const tp=((elapsed/1400)+i*0.3+j*0.18)%1;
+            const mx=a.px+(b.px-a.px)*tp,my=a.py+(b.py-a.py)*tp;
+            ctx.beginPath(); ctx.arc(mx,my,1.6,0,Math.PI*2);
+            ctx.fillStyle=`rgba(201,168,76,${al*2})`;
+            ctx.shadowColor='#C9A84C'; ctx.shadowBlur=7;
+            ctx.fill(); ctx.shadowBlur=0;
+          }
+        }
+      }
+
+      // Points sphère
+      for (const p of pps) {
+        if (p.z < -0.12) continue;
+        const bonusGold = mergeP * 0.4; // les hubs deviennent plus dorés lors de la fusion
+        if (p.hub) {
           ctx.beginPath();
-          ctx.arc(p.px, p.py, haloSize * 2, 0, Math.PI*2);
-          ctx.fillStyle = `rgba(201,168,76,${alpha * 0.10})`;
-          ctx.fill();
-          ctx.beginPath();
-          ctx.arc(p.px, p.py, p.size * 1.4, 0, Math.PI*2);
-          ctx.fillStyle = `rgba(201,168,76,${alpha * 0.9})`;
-          ctx.shadowColor = '#C9A84C';
-          ctx.shadowBlur = 14;
-          ctx.fill();
-          ctx.shadowBlur = 0;
-          // Losange sur les hubs
-          ctx.save();
-          ctx.translate(p.px, p.py);
-          ctx.rotate(Math.PI/4);
-          ctx.beginPath();
-          ctx.rect(-p.size*0.7, -p.size*0.7, p.size*1.4, p.size*1.4);
-          ctx.strokeStyle = `rgba(201,168,76,${alpha * 0.6})`;
-          ctx.lineWidth = 0.8;
-          ctx.stroke();
+          ctx.arc(p.px,p.py, p.size*1.5+bonusGold*2, 0, Math.PI*2);
+          ctx.fillStyle=`rgba(201,168,76,${p.vis*(0.75+bonusGold)})`;
+          ctx.shadowColor='#C9A84C'; ctx.shadowBlur=14;
+          ctx.fill(); ctx.shadowBlur=0;
+          // Losange
+          ctx.save(); ctx.translate(p.px,p.py); ctx.rotate(Math.PI/4);
+          ctx.strokeStyle=`rgba(201,168,76,${p.vis*0.5})`;
+          ctx.lineWidth=0.7;
+          const r=p.size*0.8;
+          ctx.strokeRect(-r,-r,r*2,r*2);
           ctx.restore();
         } else {
-          // Point standard cyan
           ctx.beginPath();
-          ctx.arc(p.px, p.py, p.size * 0.9, 0, Math.PI*2);
-          ctx.fillStyle = `rgba(80,200,200,${alpha * 0.75})`;
-          ctx.shadowColor = 'rgba(80,200,200,0.9)';
-          ctx.shadowBlur = p.size * 4;
-          ctx.fill();
-          ctx.shadowBlur = 0;
+          ctx.arc(p.px,p.py, p.size*0.88, 0, Math.PI*2);
+          ctx.fillStyle=`rgba(80,200,200,${p.vis*0.72})`;
+          ctx.shadowColor='rgba(80,200,200,0.9)'; ctx.shadowBlur=p.size*4;
+          ctx.fill(); ctx.shadowBlur=0;
         }
       }
 
-      // ── Anneau orbital autour du globe ──
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.rotate(0.3);
-      ctx.scale(1, 0.28);
-      const ringGrad = ctx.createLinearGradient(-R*1.25, 0, R*1.25, 0);
-      ringGrad.addColorStop(0, 'transparent');
-      ringGrad.addColorStop(0.3, 'rgba(201,168,76,0.25)');
-      ringGrad.addColorStop(0.5, 'rgba(201,168,76,0.08)');
-      ringGrad.addColorStop(0.7, 'rgba(201,168,76,0.25)');
-      ringGrad.addColorStop(1, 'transparent');
-      ctx.beginPath();
-      ctx.ellipse(0, 0, R*1.25, R*1.25, 0, 0, Math.PI*2);
-      ctx.strokeStyle = ringGrad;
-      ctx.lineWidth = 2.5;
-      ctx.stroke();
-      ctx.restore();
+      // ── 4. AIGLE HOLOGRAPHIQUE DORÉ ──
+      if (phase==='eagle' && eagleAlpha > 0.005 && eagleP > 0) {
+        // Position : arrive depuis en haut à gauche
+        const startX = cx - W*0.40, startY = cy - H*0.34;
+        const ax = startX + (cx - startX) * moveP;
+        const ay = startY + (cy - startY) * moveP;
+        // Taille : grandit à mesure qu'il se rapproche et se fond
+        const s  = R * (0.22 + moveP*0.58);
 
-      // ── Halo global ──
-      const outerGlow = ctx.createRadialGradient(cx, cy, R*0.7, cx, cy, R*1.5);
-      outerGlow.addColorStop(0, 'rgba(80,200,200,0.0)');
-      outerGlow.addColorStop(0.7, 'rgba(80,200,200,0.04)');
-      outerGlow.addColorStop(1, 'rgba(80,200,200,0.0)');
-      ctx.beginPath();
-      ctx.arc(cx, cy, R*1.5, 0, Math.PI*2);
-      ctx.fillStyle = outerGlow;
-      ctx.fill();
+        ctx.save();
+        ctx.translate(ax, ay);
+
+        // Halo doré DOUX autour de l'aigle (pas de bord dur)
+        const halo = ctx.createRadialGradient(0,0,s*0.1, 0,0,s*1.6);
+        halo.addColorStop(0,   `rgba(201,168,76,${eagleAlpha*0.14})`);
+        halo.addColorStop(0.5, `rgba(201,168,76,${eagleAlpha*0.07})`);
+        halo.addColorStop(1,   'rgba(201,168,76,0)');
+        ctx.beginPath(); ctx.arc(0,0,s*1.6,0,Math.PI*2);
+        ctx.fillStyle=halo; ctx.fill();
+
+        // Couches de glow (soft, SANS bord dur)
+        const glowLayers = [
+          { width:9, alpha:0.05 },
+          { width:5, alpha:0.09 },
+          { width:2.5, alpha:0.14 },
+        ];
+        ctx.lineCap='round'; ctx.lineJoin='round';
+
+        // Reveal progressif via lineDashOffset
+        const revealOffset = EAGLE_DASH_LEN*(1-Math.min(eagleP,1));
+        ctx.setLineDash([EAGLE_DASH_LEN]);
+        ctx.lineDashOffset = revealOffset;
+
+        for (const gl of glowLayers) {
+          ctx.lineWidth = gl.width;
+          ctx.strokeStyle = `rgba(201,168,76,${gl.alpha*eagleAlpha})`;
+          strokeEagle(ctx, s);
+        }
+
+        // Trait principal net (gold clair)
+        ctx.lineWidth = 1.4;
+        ctx.strokeStyle = `rgba(235,200,90,${eagleAlpha*0.90})`;
+        strokeEagle(ctx, s);
+
+        ctx.setLineDash([]);
+
+        // Nœuds clés (points lumineux sur l'aigle)
+        const nodes = [
+          {x:0, y:0.04},        // centre corps
+          {x:-0.52, y:0.00},    // milieu aile gauche
+          {x: 0.52, y:0.00},    // milieu aile droite
+          {x:-1.05, y:0.07},    // bout aile gauche
+          {x: 1.05, y:0.07},    // bout aile droite
+          {x: 0.10, y:-0.23},   // tête
+          {x:0,    y: 0.40},    // queue
+        ];
+        nodes.forEach(({x,y},i) => {
+          const nodeReveal = Math.max(0, eagleP*6 - i*0.3);
+          if (nodeReveal<=0) return;
+          const na = Math.min(1,nodeReveal)*eagleAlpha;
+          ctx.beginPath();
+          ctx.arc(x*s, y*s, 3.5+Math.sin(elapsed/600+i)*0.8, 0, Math.PI*2);
+          ctx.fillStyle=`rgba(201,168,76,${na})`;
+          ctx.shadowColor='#C9A84C'; ctx.shadowBlur=18;
+          ctx.fill(); ctx.shadowBlur=0;
+        });
+
+        // Connexions entre nœuds de l'aigle
+        if (eagleP > 0.4) {
+          const connAlpha = (eagleP-0.4)*1.67*eagleAlpha*0.35;
+          [[0,1],[0,2],[1,3],[2,4],[0,5],[0,6]].forEach(([a,b]) => {
+            const na=nodes[a], nb=nodes[b];
+            ctx.beginPath();
+            ctx.strokeStyle=`rgba(201,168,76,${connAlpha})`;
+            ctx.lineWidth=0.7;
+            ctx.moveTo(na.x*s,na.y*s); ctx.lineTo(nb.x*s,nb.y*s);
+            ctx.stroke();
+          });
+        }
+
+        ctx.restore();
+      }
+
+      // ── 5. Anneau orbital DOUX ──
+      if ((phase==='eagle' ? globeP : 1) > 0.55) {
+        const ringAlpha = phase==='eagle'
+          ? (globeP-0.55)*2.22*(0.4+mergeP*0.6)
+          : 0.9;
+        ctx.save();
+        ctx.translate(cx,cy);
+        ctx.rotate(0.28);
+        ctx.scale(1, 0.24);
+        // Gradient linéaire → fondu sur les côtés = PAS de bord dur
+        const rg = ctx.createLinearGradient(-R*1.22,0, R*1.22,0);
+        rg.addColorStop(0,    'rgba(201,168,76,0)');
+        rg.addColorStop(0.18, `rgba(201,168,76,${ringAlpha*0.28})`);
+        rg.addColorStop(0.5,  `rgba(201,168,76,${ringAlpha*0.07})`);
+        rg.addColorStop(0.82, `rgba(201,168,76,${ringAlpha*0.28})`);
+        rg.addColorStop(1,    'rgba(201,168,76,0)');
+        ctx.beginPath();
+        ctx.ellipse(0,0, R*1.22,R*1.22, 0,0,Math.PI*2);
+        ctx.strokeStyle=rg; ctx.lineWidth=1.8; ctx.stroke();
+        ctx.restore();
+      }
+
+      // ── Done? ──
+      if (phase==='eagle' && t>=1 && !doneRef.current) {
+        doneRef.current = true;
+        onEagleDone();
+      }
 
       animRef.current = requestAnimationFrame(draw);
     };
 
-    draw();
-
+    animRef.current = requestAnimationFrame(draw);
     return () => {
       cancelAnimationFrame(animRef.current);
       window.removeEventListener('resize', resize);
     };
-  }, []);
+  }, [phase, onEagleDone]);
 
   return (
-    <motion.canvas
+    <canvas
       ref={canvasRef}
-      animate={{ opacity, scale }}
-      transition={{ duration: 1.2, ease: 'easeInOut' }}
-      style={{ position:'absolute', inset:0, width:'100%', height:'100%', pointerEvents:'none' }}
+      style={{
+        position:'absolute', inset:0,
+        width:'100%', height:'100%',
+        pointerEvents:'none',
+        opacity: phase==='holo' ? 0.25 : 1,
+        transition:'opacity 1s ease',
+      }}
     />
   );
 }
 
-// ────────────────────────────────────────────────────────
-// EAGLE CONSTELLATION — L'aigle se forme depuis des
-// particules éparpillées (comme le globe se constitue)
-// ────────────────────────────────────────────────────────
-function EagleConstellation({ onComplete }: { onComplete: () => void }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const animRef = useRef<number>(0);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-    const cx = canvas.width / 2;
-    const cy = canvas.height / 2;
-
-    // Points clés de la silhouette de l'aigle (normalisés -1 à 1)
-    const eagleShape = [
-      // Corps
-      [0,0],[0.08,0.1],[0.06,0.22],[0,0.28],[-0.06,0.22],[-0.08,0.1],
-      // Tête
-      [0,-0.18],[0.06,-0.12],[0.04,-0.25],[0,-0.3],[-0.04,-0.25],[-0.06,-0.12],
-      // Bec
-      [0.12,-0.15],[0.18,-0.18],[0.12,-0.20],
-      // Aile gauche
-      [-0.45,-0.05],[-0.55,-0.02],[-0.65,0.05],[-0.70,0.10],
-      [-0.50,0.04],[-0.40,0.00],[-0.30,-0.02],
-      [-0.60,0.12],[-0.52,0.08],[-0.42,0.05],
-      // Aile droite
-      [0.45,-0.05],[0.55,-0.02],[0.65,0.05],[0.70,0.10],
-      [0.50,0.04],[0.40,0.00],[0.30,-0.02],
-      [0.60,0.12],[0.52,0.08],[0.42,0.05],
-      // Queue
-      [-0.10,0.35],[-0.05,0.42],[0,0.45],[0.05,0.42],[0.10,0.35],
-      // Serres
-      [-0.04,0.40],[0.04,0.40],
-      // Points déco supplémentaires
-      [-0.35,0.02],[0.35,0.02],[-0.20,-0.08],[0.20,-0.08],
-      [-0.15,0.15],[0.15,0.15],
-    ];
-
-    const R = Math.min(canvas.width, canvas.height) * 0.22;
-
-    // Particules : position initiale aléatoire, cible = forme aigle
-    const particles = eagleShape.map(([tx, ty]) => ({
-      x: (Math.random() - 0.5) * canvas.width,
-      y: (Math.random() - 0.5) * canvas.height + cy,
-      tx: cx + tx * R * 1.8,
-      ty: cy + ty * R * 1.8,
-      size: 1.2 + Math.random() * 2,
-      alpha: 0,
-      speed: 0.018 + Math.random() * 0.015,
-      isHub: Math.random() < 0.15,
-    }));
-
-    // Particules de fond (résidu globe → pad)
-    const bgParticles = Array.from({ length: 40 }, () => ({
-      x: Math.random() * canvas.width,
-      y: Math.random() * canvas.height,
-      vx: (Math.random()-0.5)*0.4,
-      vy: (Math.random()-0.5)*0.4,
-      alpha: Math.random()*0.3,
-      size: Math.random()*1.5+0.5,
-    }));
-
-    let startTime = Date.now();
-    const ASSEMBLE_DURATION = 2800;
-    let completed = false;
-
-    const draw = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      const elapsed = Date.now() - startTime;
-      const progress = Math.min(elapsed / ASSEMBLE_DURATION, 1);
-      const ease = 1 - Math.pow(1 - progress, 3);
-
-      // Bg particules
-      bgParticles.forEach(p => {
-        p.x += p.vx; p.y += p.vy;
-        if (p.x < 0) p.x = canvas.width;
-        if (p.x > canvas.width) p.x = 0;
-        if (p.y < 0) p.y = canvas.height;
-        if (p.y > canvas.height) p.y = 0;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
-        ctx.fillStyle = `rgba(80,200,200,${p.alpha * (1-progress*0.5)})`;
-        ctx.fill();
-      });
-
-      // Assembler les particules vers la forme aigle
-      particles.forEach((p, i) => {
-        const delay = i / particles.length * 0.4;
-        const localP = Math.max(0, Math.min((progress - delay) / (1 - delay), 1));
-        const eLocal = 1 - Math.pow(1 - localP, 2.5);
-
-        p.x = p.x + (p.tx - p.x) * p.speed * 3;
-        p.y = p.y + (p.ty - p.y) * p.speed * 3;
-        p.alpha = Math.min(p.alpha + 0.025, eLocal);
-
-        if (p.isHub) {
-          // Hub doré
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, p.size * 1.6, 0, Math.PI*2);
-          ctx.fillStyle = `rgba(201,168,76,${p.alpha * 0.9})`;
-          ctx.shadowColor = '#C9A84C';
-          ctx.shadowBlur = 16;
-          ctx.fill();
-          ctx.shadowBlur = 0;
-        } else {
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
-          ctx.fillStyle = `rgba(80,200,200,${p.alpha * 0.85})`;
-          ctx.shadowColor = 'rgba(80,200,200,0.8)';
-          ctx.shadowBlur = 10;
-          ctx.fill();
-          ctx.shadowBlur = 0;
-        }
-      });
-
-      // Connexions entre points proches une fois assemblés
-      if (progress > 0.5) {
-        const connAlpha = (progress - 0.5) * 2;
-        for (let i = 0; i < particles.length; i++) {
-          if (particles[i].alpha < 0.3) continue;
-          for (let j = i+1; j < particles.length; j++) {
-            if (particles[j].alpha < 0.3) continue;
-            const dist = Math.hypot(particles[i].x-particles[j].x, particles[i].y-particles[j].y);
-            if (dist < 60) {
-              ctx.beginPath();
-              ctx.strokeStyle = `rgba(80,200,200,${connAlpha * 0.3 * (1-dist/60)})`;
-              ctx.lineWidth = 0.5;
-              ctx.moveTo(particles[i].x, particles[i].y);
-              ctx.lineTo(particles[j].x, particles[j].y);
-              ctx.stroke();
-            }
-          }
-        }
-      }
-
-      // Cercle de halo au centre quand assemblé
-      if (progress > 0.7) {
-        const haloAlpha = (progress - 0.7) * 3.33;
-        const haloR = R * 1.3 * ease;
-        const haloGrad = ctx.createRadialGradient(cx, cy, haloR*0.4, cx, cy, haloR);
-        haloGrad.addColorStop(0, `rgba(201,168,76,0)`);
-        haloGrad.addColorStop(0.7, `rgba(201,168,76,${haloAlpha * 0.06})`);
-        haloGrad.addColorStop(1, 'rgba(201,168,76,0)');
-        ctx.beginPath();
-        ctx.arc(cx, cy, haloR, 0, Math.PI*2);
-        ctx.fillStyle = haloGrad;
-        ctx.fill();
-      }
-
-      if (progress >= 1 && !completed) {
-        completed = true;
-        setTimeout(onComplete, 400);
-      }
-
-      if (progress < 1) {
-        animRef.current = requestAnimationFrame(draw);
-      }
-    };
-
-    draw();
-    return () => cancelAnimationFrame(animRef.current);
-  }, [onComplete]);
-
-  return <canvas ref={canvasRef} style={{ position:'absolute', inset:0, width:'100%', height:'100%', pointerEvents:'none' }}/>;
-}
-
-// ────────────────────────────────────────────────────────
-// CODE BOX redessinée
-// ────────────────────────────────────────────────────────
-function CodeBox({ index, entered, status }: { index:number; entered:string; status:'idle'|'ok'|'err' }) {
+// ─────────────────────────────────────────────────────────
+// CODE BOX
+// ─────────────────────────────────────────────────────────
+function CodeBox({ index, entered, status }: {
+  index:number; entered:string; status:'idle'|'ok'|'err';
+}) {
   const isFilled = index < entered.length;
-  const isActive = index === entered.length && status === 'idle';
-  const borderColor = status==='err' ? 'rgba(192,57,43,0.85)' : status==='ok' ? 'rgba(180,160,80,0.80)' : isFilled ? 'rgba(201,168,76,0.55)' : isActive ? 'rgba(201,168,76,0.85)' : 'rgba(201,168,76,0.15)';
-  const glowColor = status==='err' ? 'rgba(192,57,43,0.3)' : status==='ok' ? 'rgba(201,168,76,0.4)' : isActive ? 'rgba(201,168,76,0.25)' : 'transparent';
+  const isActive = index === entered.length && status==='idle';
+  const bc = status==='err'?'rgba(192,57,43,0.85)':status==='ok'?'rgba(180,160,80,0.80)':isFilled?'rgba(201,168,76,0.55)':isActive?'rgba(201,168,76,0.85)':'rgba(201,168,76,0.15)';
+  const gc = status==='err'?'rgba(192,57,43,0.3)':status==='ok'?'rgba(201,168,76,0.4)':isActive?'rgba(201,168,76,0.25)':'transparent';
   return (
-    <motion.div animate={status==='err' ? { x:[-8,8,-6,6,-3,3,0] } : {}} transition={{ duration:0.4 }}
-      style={{ width:54, height:66, display:'flex', alignItems:'center', justifyContent:'center', borderRadius:4, border:`1.5px solid ${borderColor}`, background:isActive?'rgba(201,168,76,0.06)':'rgba(201,168,76,0.02)', color:'#C9A84C', position:'relative', boxShadow:`0 0 18px ${glowColor}`, transition:'border-color .2s, box-shadow .3s' }}>
-      <div style={{ position:'absolute', top:3, left:3, width:6, height:6, borderTop:`1px solid ${borderColor}`, borderLeft:`1px solid ${borderColor}`, opacity:0.7 }}/>
-      <div style={{ position:'absolute', bottom:3, right:3, width:6, height:6, borderBottom:`1px solid ${borderColor}`, borderRight:`1px solid ${borderColor}`, opacity:0.7 }}/>
+    <motion.div
+      animate={status==='err'?{x:[-8,8,-6,6,-3,3,0]}:{}}
+      transition={{duration:0.4}}
+      style={{width:54,height:66,display:'flex',alignItems:'center',justifyContent:'center',borderRadius:4,border:`1.5px solid ${bc}`,background:isActive?'rgba(201,168,76,0.06)':'rgba(201,168,76,0.02)',position:'relative',boxShadow:`0 0 18px ${gc}`,transition:'border-color .2s, box-shadow .3s'}}>
+      <div style={{position:'absolute',top:3,left:3,width:6,height:6,borderTop:`1px solid ${bc}`,borderLeft:`1px solid ${bc}`,opacity:0.7}}/>
+      <div style={{position:'absolute',bottom:3,right:3,width:6,height:6,borderBottom:`1px solid ${bc}`,borderRight:`1px solid ${bc}`,opacity:0.7}}/>
       {isFilled
-        ? <motion.div initial={{ scale:0 }} animate={{ scale:1 }} transition={{ type:'spring', stiffness:400 }}
-            style={{ width:10, height:10, borderRadius:'50%', background:'#C9A84C', boxShadow:'0 0 12px rgba(201,168,76,0.8)' }}/>
+        ? <motion.div initial={{scale:0}} animate={{scale:1}} transition={{type:'spring',stiffness:400}}
+            style={{width:10,height:10,borderRadius:'50%',background:'#C9A84C',boxShadow:'0 0 12px rgba(201,168,76,0.8)'}}/>
         : isActive
-          ? <motion.div animate={{ opacity:[1,0,1] }} transition={{ duration:0.85, repeat:Infinity }}
-              style={{ width:2.5, height:26, background:'#C9A84C', borderRadius:2, boxShadow:'0 0 8px rgba(201,168,76,0.8)' }}/>
+          ? <motion.div animate={{opacity:[1,0,1]}} transition={{duration:0.85,repeat:Infinity}}
+              style={{width:2.5,height:26,background:'#C9A84C',borderRadius:2,boxShadow:'0 0 8px rgba(201,168,76,0.8)'}}/>
           : null}
     </motion.div>
   );
 }
 
-// ────────────────────────────────────────────────────────
-// NUM KEY avec ripple
-// ────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────
+// NUM KEY
+// ─────────────────────────────────────────────────────────
 function NumKey({ digit, onClick }: { digit:string; onClick:()=>void }) {
   const [pressed, setPressed] = useState(false);
   return (
     <motion.button
-      onPointerDown={() => { setPressed(true); onClick(); }}
-      onPointerUp={() => setPressed(false)}
-      onPointerLeave={() => setPressed(false)}
-      animate={pressed ? { scale:0.88 } : { scale:1 }}
-      transition={{ type:'spring', stiffness:600, damping:25 }}
-      style={{ fontFamily:'Share Tech Mono,monospace', fontSize:18, fontWeight:600, padding:'12px 0', borderRadius:4, width:'100%', background:pressed?'rgba(201,168,76,0.14)':'rgba(201,168,76,0.04)', border:`1px solid ${pressed?'rgba(201,168,76,0.45)':'rgba(201,168,76,0.14)'}`, color:pressed?'#E8C97A':'#A89878', cursor:'pointer', userSelect:'none', position:'relative', overflow:'hidden', boxShadow:pressed?'0 0 14px rgba(201,168,76,0.18)':'none', transition:'box-shadow .12s, color .12s' }}>
-      {pressed && <motion.div initial={{ scale:0, opacity:0.6 }} animate={{ scale:3, opacity:0 }} transition={{ duration:0.4 }}
-        style={{ position:'absolute', top:'50%', left:'50%', width:30, height:30, borderRadius:'50%', background:'rgba(201,168,76,0.3)', transform:'translate(-50%,-50%)', pointerEvents:'none' }}/>}
+      onPointerDown={()=>{setPressed(true);onClick();}}
+      onPointerUp={()=>setPressed(false)}
+      onPointerLeave={()=>setPressed(false)}
+      animate={pressed?{scale:0.88}:{scale:1}}
+      transition={{type:'spring',stiffness:600,damping:25}}
+      style={{fontFamily:'Share Tech Mono,monospace',fontSize:18,fontWeight:600,padding:'12px 0',borderRadius:4,width:'100%',background:pressed?'rgba(201,168,76,0.14)':'rgba(201,168,76,0.04)',border:`1px solid ${pressed?'rgba(201,168,76,0.45)':'rgba(201,168,76,0.14)'}`,color:pressed?'#E8C97A':'#A89878',cursor:'pointer',userSelect:'none',position:'relative',overflow:'hidden',transition:'box-shadow .12s, color .12s'}}>
+      {pressed&&<motion.div initial={{scale:0,opacity:0.6}} animate={{scale:3,opacity:0}} transition={{duration:0.4}} style={{position:'absolute',top:'50%',left:'50%',width:30,height:30,borderRadius:'50%',background:'rgba(201,168,76,0.3)',transform:'translate(-50%,-50%)',pointerEvents:'none'}}/>}
       {digit}
     </motion.button>
   );
 }
 
-// ────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────
 // INTRO SCREEN PRINCIPAL
-// ────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────
 export default function IntroScreen() {
   const { setMode } = useDossier();
-  const [phase, setPhase] = useState<Phase>('eagle');
-  const [eagleDone, setEagleDone] = useState(false);
-  const [entered, setEntered] = useState('');
-  const [status, setStatus] = useState<'idle'|'ok'|'err'>('idle');
+  const [phase,     setPhase]     = useState<Phase>('eagle');
+  const [entered,   setEntered]   = useState('');
+  const [status,    setStatus]    = useState<'idle'|'ok'|'err'>('idle');
   const [statusMsg, setStatusMsg] = useState('');
-  const [gStat, setGStat] = useState("Analyse du protocole d'accès...");
-  const [showVBox, setShowVBox] = useState(false);
+  const [gStat,     setGStat]     = useState("Analyse du protocole d'accès...");
+  const [showVBox,  setShowVBox]  = useState(false);
   const [showStamp, setShowStamp] = useState(false);
-  const [attempts, setAttempts] = useState(0);
-  const holoRef = useRef<HoloRef>(null);
+  const [attempts,  setAttempts]  = useState(0);
+  const holoRef   = useRef<HoloRef>(null);
   const audioInit = useRef(false);
-  const busy = useRef(false);
+  const busy      = useRef(false);
 
-  // Eagle → Pad (après que la constellation soit formée)
+  // Eagle done → transition vers pad
   const handleEagleDone = useCallback(() => {
-    setEagleDone(true);
-    setTimeout(() => setPhase('pad'), 900);
+    setTimeout(() => setPhase('pad'), 500);
   }, []);
 
-  // Fallback timer si l'animation dure trop longtemps
+  // Fallback si animation trop longue
   useEffect(() => {
-    const t = setTimeout(() => { if (phase === 'eagle') setPhase('pad'); }, 5000);
+    const t = setTimeout(()=>{ if(phase==='eagle') setPhase('pad'); }, 7000);
     return () => clearTimeout(t);
   }, [phase]);
 
-  const initAudio = () => { if (!audioInit.current) { audio.init(); audioInit.current = true; } };
+  const initAudio = () => { if(!audioInit.current){audio.init();audioInit.current=true;} };
 
-  const addDigit = (d: string) => {
-    if (busy.current || entered.length >= 4) return;
+  const addDigit = (d:string) => {
+    if(busy.current||entered.length>=4) return;
     initAudio(); audio.key();
-    const next = entered + d; setEntered(next);
-    if (next.length === 4) { busy.current = true; setTimeout(() => checkCode(next), 380); }
+    const next=entered+d; setEntered(next);
+    if(next.length===4){ busy.current=true; setTimeout(()=>checkCode(next),380); }
   };
-
-  const delDigit = () => { if (busy.current) return; initAudio(); audio.del(); setEntered(e => e.slice(0,-1)); setStatusMsg(''); };
-
-  const checkCode = (code: string) => {
-    const isAdmin = code === CONFIG.codes.admin;
-    const isVisitor = code === CONFIG.codes.visiteur;
-    if (isAdmin || isVisitor) {
+  const delDigit = () => {
+    if(busy.current) return;
+    initAudio(); audio.del();
+    setEntered(e=>e.slice(0,-1)); setStatusMsg('');
+  };
+  const checkCode = (code:string) => {
+    const isAdmin   = code===CONFIG.codes.admin;
+    const isVisitor = code===CONFIG.codes.visiteur;
+    if(isAdmin||isVisitor) {
       audio.ok(); setStatus('ok');
-      setStatusMsg(isAdmin ? '✓ ACCÈS ADMINISTRATEUR — ÉDITION ACTIVÉE' : '✓ ACCÈS VISITEUR — LECTURE SEULE');
-      setTimeout(() => startHolo(isAdmin ? 'admin' : 'visitor'), 1000);
+      setStatusMsg(isAdmin?'✓ ACCÈS ADMINISTRATEUR — ÉDITION ACTIVÉE':'✓ ACCÈS VISITEUR — LECTURE SEULE');
+      setTimeout(()=>startHolo(isAdmin?'admin':'visitor'), 1000);
     } else {
-      audio.err(); setStatus('err'); setAttempts(a => a+1);
+      audio.err(); setStatus('err'); setAttempts(a=>a+1);
       setStatusMsg('✗ CODE INCORRECT — ACCÈS REFUSÉ');
-      setTimeout(() => { setStatus('idle'); setStatusMsg(''); setEntered(''); busy.current = false; }, 1400);
+      setTimeout(()=>{ setStatus('idle'); setStatusMsg(''); setEntered(''); busy.current=false; }, 1400);
     }
   };
-
-  const startHolo = (accessMode: 'admin'|'visitor') => {
+  const startHolo = (accessMode:'admin'|'visitor') => {
     setPhase('holo');
-    const ticks = [0,155,295,420,530,625,705,772,828,872,908,934,952,963];
-    ticks.forEach(d => setTimeout(() => audio.tick(), d+260));
-    setTimeout(() => { holoRef.current?.lock(); audio.lock(); setGStat('Déclassification en cours...'); }, 1620);
-    setTimeout(() => { audio.voice(); setShowVBox(true); }, 2700);
-    setTimeout(() => { setShowStamp(true); audio.stamp(); }, 4200);
-    setTimeout(() => { audio.reveal(); launchConfetti(); setPhase('done'); setMode(accessMode); }, 6500);
+    const ticks=[0,155,295,420,530,625,705,772,828,872,908,934,952,963];
+    ticks.forEach(d=>setTimeout(()=>audio.tick(), d+260));
+    setTimeout(()=>{ holoRef.current?.lock(); audio.lock(); setGStat('Déclassification en cours...'); }, 1620);
+    setTimeout(()=>{ audio.voice(); setShowVBox(true); }, 2700);
+    setTimeout(()=>{ setShowStamp(true); audio.stamp(); }, 4200);
+    setTimeout(()=>{ audio.reveal(); launchConfetti(); setPhase('done'); setMode(accessMode); }, 6500);
   };
 
-  if (phase === 'done') return null;
+  if(phase==='done') return null;
 
-  const mono: React.CSSProperties = { fontFamily:'"Share Tech Mono",monospace' };
+  const mono:React.CSSProperties = { fontFamily:'"Share Tech Mono",monospace' };
 
   return (
-    <motion.div exit={{ opacity:0, scale:1.04 }} transition={{ duration:0.9 }}
-      style={{ position:'fixed', inset:0, zIndex:9999, background:'#020810', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', overflow:'hidden' }}>
+    <motion.div exit={{opacity:0,scale:1.04}} transition={{duration:0.9}}
+      style={{position:'fixed',inset:0,zIndex:9999,background:'#020810',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',overflow:'hidden'}}>
 
-      {/* ── Globe animé en fond — présent dans toutes les phases ── */}
-      <GlobeCanvas
-        opacity={phase === 'eagle' ? 0.4 : phase === 'pad' ? 0.85 : 0.2}
-        scale={phase === 'eagle' ? 0.85 : 1}
-      />
+      {/* ── Globe + Aigle (toujours monté) ── */}
+      <GlobeEagleCanvas phase={phase} onEagleDone={handleEagleDone}/>
 
       {/* Grille terminale */}
-      <div style={{ position:'absolute', inset:0, pointerEvents:'none', backgroundImage:'linear-gradient(rgba(201,168,76,0.018) 1px,transparent 1px),linear-gradient(90deg,rgba(201,168,76,0.018) 1px,transparent 1px)', backgroundSize:'40px 40px' }}/>
+      <div style={{position:'absolute',inset:0,pointerEvents:'none',backgroundImage:'linear-gradient(rgba(201,168,76,0.016) 1px,transparent 1px),linear-gradient(90deg,rgba(201,168,76,0.016) 1px,transparent 1px)',backgroundSize:'40px 40px'}}/>
 
-      {/* Scan line */}
-      <motion.div animate={{ y:['-4px','100vh'] }} transition={{ duration:8, repeat:Infinity, ease:'linear', repeatDelay:3 }}
-        style={{ position:'absolute', left:0, right:0, height:2, pointerEvents:'none', background:'linear-gradient(90deg,transparent,rgba(80,200,200,0.10),rgba(80,200,200,0.05),transparent)', zIndex:2 }}/>
+      {/* Ligne de scan */}
+      <motion.div animate={{y:['-4px','100vh']}} transition={{duration:9,repeat:Infinity,ease:'linear',repeatDelay:3}}
+        style={{position:'absolute',left:0,right:0,height:2,pointerEvents:'none',background:'linear-gradient(90deg,transparent,rgba(80,200,200,0.09),transparent)',zIndex:2}}/>
 
       {/* Coins HUD */}
-      {[
-        {top:12,left:12,borderTop:'1.5px solid rgba(201,168,76,0.4)',borderLeft:'1.5px solid rgba(201,168,76,0.4)'},
-        {top:12,right:12,borderTop:'1.5px solid rgba(201,168,76,0.4)',borderRight:'1.5px solid rgba(201,168,76,0.4)'},
-        {bottom:12,left:12,borderBottom:'1.5px solid rgba(201,168,76,0.4)',borderLeft:'1.5px solid rgba(201,168,76,0.4)'},
-        {bottom:12,right:12,borderBottom:'1.5px solid rgba(201,168,76,0.4)',borderRight:'1.5px solid rgba(201,168,76,0.4)'},
-      ].map((s,i) => (
-        <motion.div key={i} initial={{ opacity:0, scale:0.4 }} animate={{ opacity:1, scale:1 }} transition={{ delay:0.3+i*0.1 }}
-          style={{ position:'absolute', ...s, width:44, height:44, zIndex:25, pointerEvents:'none' }}/>
+      {[{top:12,left:12,borderTop:'1.5px solid rgba(201,168,76,0.38)',borderLeft:'1.5px solid rgba(201,168,76,0.38)'},{top:12,right:12,borderTop:'1.5px solid rgba(201,168,76,0.38)',borderRight:'1.5px solid rgba(201,168,76,0.38)'},{bottom:12,left:12,borderBottom:'1.5px solid rgba(201,168,76,0.38)',borderLeft:'1.5px solid rgba(201,168,76,0.38)'},{bottom:12,right:12,borderBottom:'1.5px solid rgba(201,168,76,0.38)',borderRight:'1.5px solid rgba(201,168,76,0.38)'}].map((s,i)=>(
+        <motion.div key={i} initial={{opacity:0,scale:0.4}} animate={{opacity:1,scale:1}} transition={{delay:0.3+i*0.1}}
+          style={{position:'absolute',...s,width:44,height:44,zIndex:25,pointerEvents:'none'}}/>
       ))}
 
-      {/* Tentatives */}
-      {phase==='pad' && attempts>0 && (
-        <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }}
-          style={{ position:'absolute', top:18, right:24, zIndex:30, ...mono, fontSize:9, letterSpacing:3, color:'rgba(192,57,43,0.65)', textTransform:'uppercase' }}>
-          TENTATIVES : {attempts}
-        </motion.div>
-      )}
-
-      {/* ── EAGLE PHASE — constellation qui se forme ── */}
-      {phase === 'eagle' && (
-        <motion.div key="eagle" initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }}
-          style={{ position:'relative', zIndex:10, display:'flex', flexDirection:'column', alignItems:'center', gap:0, pointerEvents:'none' }}>
-          {/* Constellation aigle */}
-          <EagleConstellation onComplete={handleEagleDone} />
-
-          {/* Textes en bas */}
-          <motion.div initial={{ opacity:0 }} animate={{ opacity: eagleDone ? 0 : 1 }} transition={{ delay:1.5, duration:0.8 }}
-            style={{ position:'absolute', bottom: '22%', left:'50%', transform:'translateX(-50%)', display:'flex', flexDirection:'column', alignItems:'center', gap:10 }}>
-            <div style={{ ...mono, fontSize:10, letterSpacing:6, color:'rgba(201,168,76,0.35)', textTransform:'uppercase', whiteSpace:'nowrap' }}>
-              Département des Finances — Los Santos
-            </div>
-            <motion.div animate={{ opacity:[0.2,0.7,0.2] }} transition={{ duration:1.4, repeat:Infinity }}
-              style={{ ...mono, fontSize:8, letterSpacing:5, color:'rgba(80,200,200,0.25)', textTransform:'uppercase' }}>
-              ◈ Initialisation du système sécurisé...
-            </motion.div>
+      {/* ── EAGLE PHASE — textes ── */}
+      {phase==='eagle' && (
+        <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+          style={{position:'absolute',bottom:'18%',left:'50%',transform:'translateX(-50%)',display:'flex',flexDirection:'column',alignItems:'center',gap:10,pointerEvents:'none',zIndex:10}}>
+          <div style={{...mono,fontSize:9,letterSpacing:6,color:'rgba(201,168,76,0.32)',textTransform:'uppercase',whiteSpace:'nowrap'}}>
+            Département des Finances — Los Santos
+          </div>
+          <motion.div animate={{opacity:[0.18,0.65,0.18]}} transition={{duration:1.5,repeat:Infinity}}
+            style={{...mono,fontSize:8,letterSpacing:5,color:'rgba(80,200,200,0.22)',textTransform:'uppercase'}}>
+            ◈ Initialisation du système sécurisé...
           </motion.div>
         </motion.div>
       )}
 
       {/* ── PAD PHASE ── */}
       {phase==='pad' && (
-        <motion.div key="pad" initial={{ opacity:0, y:16 }} animate={{ opacity:1, y:0 }} transition={{ duration:0.55, ease:[0.22,1,0.36,1] }}
-          style={{ display:'flex', flexDirection:'column', alignItems:'center', textAlign:'center', position:'relative', zIndex:10 }}>
+        <motion.div key="pad" initial={{opacity:0,y:18}} animate={{opacity:1,y:0}} transition={{duration:0.55,ease:[0.22,1,0.36,1]}}
+          style={{display:'flex',flexDirection:'column',alignItems:'center',textAlign:'center',position:'relative',zIndex:10}}>
 
-          {/* Séparateur haut */}
-          <motion.div initial={{ scaleX:0 }} animate={{ scaleX:1 }} transition={{ delay:0.1, duration:0.7, ease:[0.22,1,0.36,1] }}
-            style={{ width:320, height:1, background:'linear-gradient(90deg,transparent,rgba(201,168,76,0.55),transparent)', marginBottom:14 }}/>
+          {/* Tentatives */}
+          {attempts>0 && (
+            <motion.div initial={{opacity:0}} animate={{opacity:1}}
+              style={{position:'absolute',top:-34,right:0,...mono,fontSize:9,letterSpacing:3,color:'rgba(192,57,43,0.62)',textTransform:'uppercase'}}>
+              TENTATIVES : {attempts}
+            </motion.div>
+          )}
 
-          {/* Badge aigle compact */}
-          <motion.div initial={{ scale:0.5, opacity:0 }} animate={{ scale:1, opacity:1 }} transition={{ delay:0.2, type:'spring', stiffness:160 }}
-            style={{ marginBottom:12, position:'relative' }}>
-            <motion.div animate={{ opacity:[0.25,0.65,0.25], scale:[0.92,1.08,0.92] }} transition={{ duration:3.5, repeat:Infinity }}
-              style={{ position:'absolute', inset:-18, borderRadius:'50%', background:'radial-gradient(circle,rgba(80,200,200,0.10) 0%,transparent 70%)', pointerEvents:'none' }}/>
-            <div style={{ width:70, height:70, borderRadius:'50%', border:'2px solid rgba(201,168,76,0.65)', background:'radial-gradient(circle,#1A2438 60%,#020810)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:34, position:'relative', boxShadow:'0 0 28px rgba(201,168,76,0.12), 0 0 60px rgba(80,200,200,0.06)' }}>🦅</div>
+          <motion.div initial={{scaleX:0}} animate={{scaleX:1}} transition={{delay:0.1,duration:0.7,ease:[0.22,1,0.36,1]}}
+            style={{width:320,height:1,background:'linear-gradient(90deg,transparent,rgba(201,168,76,0.55),transparent)',marginBottom:14}}/>
+
+          {/* Badge */}
+          <motion.div initial={{scale:0.5,opacity:0}} animate={{scale:1,opacity:1}} transition={{delay:0.2,type:'spring',stiffness:160}}
+            style={{marginBottom:12,position:'relative'}}>
+            <motion.div animate={{opacity:[0.22,0.58,0.22],scale:[0.92,1.08,0.92]}} transition={{duration:3.8,repeat:Infinity}}
+              style={{position:'absolute',inset:-18,borderRadius:'50%',background:'radial-gradient(circle,rgba(80,200,200,0.09) 0%,transparent 70%)',pointerEvents:'none'}}/>
+            <div style={{width:70,height:70,borderRadius:'50%',border:'2px solid rgba(201,168,76,0.65)',background:'radial-gradient(circle,#1A2438 60%,#020810)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:34,boxShadow:'0 0 28px rgba(201,168,76,0.12)'}}>🦅</div>
           </motion.div>
 
-          <motion.div initial={{ opacity:0, y:5 }} animate={{ opacity:1, y:0 }} transition={{ delay:0.3 }}
-            style={{ fontFamily:'Cinzel,serif', fontSize:7.5, letterSpacing:6, color:'#7A5910', textTransform:'uppercase', marginBottom:3 }}>
+          <motion.div initial={{opacity:0,y:5}} animate={{opacity:1,y:0}} transition={{delay:0.30}}
+            style={{fontFamily:'Cinzel,serif',fontSize:7.5,letterSpacing:6,color:'#7A5910',textTransform:'uppercase',marginBottom:3}}>
             Département des Finances — Los Santos
           </motion.div>
-          <motion.div initial={{ opacity:0, y:5 }} animate={{ opacity:1, y:0 }} transition={{ delay:0.38 }}
-            style={{ fontFamily:'Cinzel,serif', fontSize:19, fontWeight:700, color:'#C9A84C', textTransform:'uppercase', letterSpacing:3, marginBottom:4 }}>
+          <motion.div initial={{opacity:0,y:5}} animate={{opacity:1,y:0}} transition={{delay:0.38}}
+            style={{fontFamily:'Cinzel,serif',fontSize:19,fontWeight:700,color:'#C9A84C',textTransform:'uppercase',letterSpacing:3,marginBottom:4}}>
             Dossier Confidentiel
           </motion.div>
-          <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} transition={{ delay:0.46 }}
-            style={{ ...mono, fontSize:7.5, letterSpacing:3, color:'rgba(201,168,76,0.20)', textTransform:'uppercase', marginBottom:18 }}>
+          <motion.div initial={{opacity:0}} animate={{opacity:1}} transition={{delay:0.46}}
+            style={{...mono,fontSize:7.5,letterSpacing:3,color:'rgba(201,168,76,0.20)',textTransform:'uppercase',marginBottom:18}}>
             Code Visiteur — Lecture &nbsp;/&nbsp; Code Admin — Édition
           </motion.div>
 
-          {/* Divider */}
-          <motion.div initial={{ scaleX:0 }} animate={{ scaleX:1 }} transition={{ delay:0.45, duration:0.7, ease:[0.22,1,0.36,1] }}
-            style={{ width:180, height:1, background:'linear-gradient(90deg,transparent,#C9A84C,transparent)', marginBottom:18 }}/>
+          <motion.div initial={{scaleX:0}} animate={{scaleX:1}} transition={{delay:0.44,duration:0.7,ease:[0.22,1,0.36,1]}}
+            style={{width:180,height:1,background:'linear-gradient(90deg,transparent,#C9A84C,transparent)',marginBottom:18}}/>
 
-          <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} transition={{ delay:0.55 }}
-            style={{ ...mono, fontSize:8, letterSpacing:4, color:'rgba(201,168,76,0.42)', textTransform:'uppercase', marginBottom:12 }}>
+          <motion.div initial={{opacity:0}} animate={{opacity:1}} transition={{delay:0.54}}
+            style={{...mono,fontSize:8,letterSpacing:4,color:'rgba(201,168,76,0.42)',textTransform:'uppercase',marginBottom:12}}>
             ◈ &nbsp; Entrez le code d'accès &nbsp; ◈
           </motion.div>
 
           {/* Code boxes */}
-          <motion.div initial={{ opacity:0, scale:0.92 }} animate={{ opacity:1, scale:1 }} transition={{ delay:0.6, type:'spring' }}
-            style={{ display:'flex', gap:10, marginBottom:16 }}>
-            {[0,1,2,3].map(i => <CodeBox key={i} index={i} entered={entered} status={status}/>)}
+          <motion.div initial={{opacity:0,scale:0.92}} animate={{opacity:1,scale:1}} transition={{delay:0.60,type:'spring'}}
+            style={{display:'flex',gap:10,marginBottom:16}}>
+            {[0,1,2,3].map(i=><CodeBox key={i} index={i} entered={entered} status={status}/>)}
           </motion.div>
 
           {/* Status */}
           <AnimatePresence mode="wait">
-            {statusMsg ? (
-              <motion.div key="msg" initial={{ opacity:0, y:-4 }} animate={{ opacity:1, y:0 }} exit={{ opacity:0 }} transition={{ duration:0.18 }}
-                style={{ ...mono, fontSize:8, letterSpacing:2, textTransform:'uppercase', height:17, marginBottom:12, color:status==='ok'?'rgba(180,160,80,0.92)':'rgba(192,57,43,0.88)' }}>
-                {statusMsg}
-              </motion.div>
-            ) : <div style={{ height:17, marginBottom:12 }}/>}
+            {statusMsg
+              ? <motion.div key="msg" initial={{opacity:0,y:-4}} animate={{opacity:1,y:0}} exit={{opacity:0}} transition={{duration:0.18}}
+                  style={{...mono,fontSize:8,letterSpacing:2,textTransform:'uppercase',height:17,marginBottom:12,color:status==='ok'?'rgba(180,160,80,0.92)':'rgba(192,57,43,0.88)'}}>
+                  {statusMsg}
+                </motion.div>
+              : <div style={{height:17,marginBottom:12}}/>
+            }
           </AnimatePresence>
 
           {/* Numpad */}
-          <motion.div initial={{ opacity:0, y:8 }} animate={{ opacity:1, y:0 }} transition={{ delay:0.65 }}
-            style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:6, width:182, marginBottom:12, position:'relative', zIndex:10 }}>
-            {['1','2','3','4','5','6','7','8','9'].map(d => <NumKey key={d} digit={d} onClick={() => addDigit(d)}/>)}
+          <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{delay:0.65}}
+            style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:6,width:182,marginBottom:12,position:'relative',zIndex:10}}>
+            {['1','2','3','4','5','6','7','8','9'].map(d=><NumKey key={d} digit={d} onClick={()=>addDigit(d)}/>)}
             <div/>
-            <NumKey digit="0" onClick={() => addDigit('0')}/>
-            <motion.button whileHover={{ background:'rgba(192,57,43,0.10)' } as any} whileTap={{ scale:0.88 }} onClick={delDigit}
-              style={{ ...mono, fontSize:16, padding:'12px 0', borderRadius:4, background:'rgba(192,57,43,0.04)', border:'1px solid rgba(192,57,43,0.16)', color:'rgba(192,57,43,0.58)', cursor:'pointer', userSelect:'none' }}>⌫</motion.button>
+            <NumKey digit="0" onClick={()=>addDigit('0')}/>
+            <motion.button whileHover={{background:'rgba(192,57,43,0.10)'}as any} whileTap={{scale:0.88}} onClick={delDigit}
+              style={{...mono,fontSize:16,padding:'12px 0',borderRadius:4,background:'rgba(192,57,43,0.04)',border:'1px solid rgba(192,57,43,0.16)',color:'rgba(192,57,43,0.58)',cursor:'pointer',userSelect:'none'}}>⌫</motion.button>
           </motion.div>
 
-          {/* Bas */}
-          <motion.div initial={{ scaleX:0 }} animate={{ scaleX:1 }} transition={{ delay:0.72, duration:0.6, ease:[0.22,1,0.36,1] }}
-            style={{ width:260, height:1, background:'linear-gradient(90deg,transparent,rgba(201,168,76,0.18),transparent)', marginBottom:8 }}/>
-          <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} transition={{ delay:0.80 }}
-            style={{ ...mono, fontSize:7, letterSpacing:4, color:'rgba(201,168,76,0.12)', textTransform:'uppercase' }}>
+          <motion.div initial={{scaleX:0}} animate={{scaleX:1}} transition={{delay:0.72,duration:0.6,ease:[0.22,1,0.36,1]}}
+            style={{width:260,height:1,background:'linear-gradient(90deg,transparent,rgba(201,168,76,0.18),transparent)',marginBottom:8}}/>
+          <motion.div initial={{opacity:0}} animate={{opacity:1}} transition={{delay:0.80}}
+            style={{...mono,fontSize:7,letterSpacing:4,color:'rgba(201,168,76,0.12)',textTransform:'uppercase'}}>
             SYSTÈME SÉCURISÉ ◈ NIVEAU ALPHA CONFIDENTIEL
           </motion.div>
         </motion.div>
@@ -713,21 +643,21 @@ export default function IntroScreen() {
 
       {/* ── HOLO PHASE ── */}
       {phase==='holo' && (
-        <motion.div key="holo" initial={{ opacity:0 }} animate={{ opacity:1 }} transition={{ duration:0.4 }}
-          style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:14, position:'relative', zIndex:10 }}>
+        <motion.div key="holo" initial={{opacity:0}} animate={{opacity:1}} transition={{duration:0.4}}
+          style={{display:'flex',flexDirection:'column',alignItems:'center',gap:14,position:'relative',zIndex:10}}>
           <HoloCanvas ref={holoRef}/>
-          <div style={{ ...mono, fontSize:9, letterSpacing:3, color:'rgba(201,168,76,0.3)', textTransform:'uppercase' }}>{gStat}</div>
-          {showVBox && (
-            <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} style={{ textAlign:'center' }}>
-              <div style={{ ...mono, fontSize:9, letterSpacing:4, color:'rgba(201,168,76,0.36)', textTransform:'uppercase', marginBottom:5 }}>Identification confirmée — Dossier</div>
-              <div style={{ fontFamily:'Cinzel,serif', fontSize:18, color:'#C9A84C', letterSpacing:5, textTransform:'uppercase' }}>{CONFIG.candidat.nomComplet}</div>
-              <div style={{ width:180, height:1, background:'linear-gradient(90deg,transparent,#C9A84C,transparent)', margin:'8px auto 0' }}/>
+          <div style={{...mono,fontSize:9,letterSpacing:3,color:'rgba(201,168,76,0.3)',textTransform:'uppercase'}}>{gStat}</div>
+          {showVBox&&(
+            <motion.div initial={{opacity:0}} animate={{opacity:1}} style={{textAlign:'center'}}>
+              <div style={{...mono,fontSize:9,letterSpacing:4,color:'rgba(201,168,76,0.36)',textTransform:'uppercase',marginBottom:5}}>Identification confirmée — Dossier</div>
+              <div style={{fontFamily:'Cinzel,serif',fontSize:18,color:'#C9A84C',letterSpacing:5,textTransform:'uppercase'}}>{CONFIG.candidat.nomComplet}</div>
+              <div style={{width:180,height:1,background:'linear-gradient(90deg,transparent,#C9A84C,transparent)',margin:'8px auto 0'}}/>
             </motion.div>
           )}
-          {showStamp && (
-            <motion.div className="stamp-slam" style={{ border:'5px solid rgba(192,57,43,0.86)', padding:'14px 34px', transform:'rotate(-8deg)', position:'relative' }}>
-              <div style={{ position:'absolute', inset:4, border:'2px solid rgba(192,57,43,0.26)' }}/>
-              <div style={{ fontFamily:'Cinzel,serif', fontWeight:700, fontSize:32, letterSpacing:8, textTransform:'uppercase', color:'rgba(192,57,43,0.9)' }}>Déclassifié</div>
+          {showStamp&&(
+            <motion.div className="stamp-slam" style={{border:'5px solid rgba(192,57,43,0.86)',padding:'14px 34px',transform:'rotate(-8deg)',position:'relative'}}>
+              <div style={{position:'absolute',inset:4,border:'2px solid rgba(192,57,43,0.26)'}}/>
+              <div style={{fontFamily:'Cinzel,serif',fontWeight:700,fontSize:32,letterSpacing:8,textTransform:'uppercase',color:'rgba(192,57,43,0.9)'}}>Déclassifié</div>
             </motion.div>
           )}
         </motion.div>
