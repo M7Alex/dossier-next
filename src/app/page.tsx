@@ -25,6 +25,15 @@ export default function Home() {
   }, []);
   const totalSlides = CONFIG.slides.length + extraPages.length;
 
+  // Preload legacy audio silently in background to avoid lag on slide 8
+  useEffect(() => {
+    const link = document.createElement('link');
+    link.rel = 'preload';
+    link.as = 'audio';
+    link.href = '/legacy_theme.mp3';
+    document.head.appendChild(link);
+  }, []);
+
   // Load from KV on first unlock — merge with any local content
   const kvLoaded = useRef(false);
   useEffect(() => {
