@@ -30,7 +30,7 @@ export default function Home() {
     const link = document.createElement('link');
     link.rel = 'preload';
     link.as = 'audio';
-    link.href = '/legacy_theme.mp3';
+    link.href = '/legacy_theme .mp3';
     document.head.appendChild(link);
   }, []);
 
