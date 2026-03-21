@@ -7,54 +7,60 @@ const STARK_IMG = "data:image/png;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1B
 
 // ── Legacy cinematic theme — Star Citizen orchestral mix ──
 let _legacyAudio: HTMLAudioElement | null = null;
+let _audioReady = false;
+
+function initAudioOnInteraction(targetVol: number) {
+  if (_audioReady) return;
+  _audioReady = true;
+  
+  const audio = new Audio('/legacy_theme.mp3');
+  _legacyAudio = audio;
+  audio.volume = 0;
+  
+  audio.play().then(() => {
+    // Success — fade in
+    let vol = 0;
+    const step = targetVol / 60;
+    const iv = setInterval(() => {
+      vol = Math.min(vol + step, targetVol);
+      if (_legacyAudio) _legacyAudio.volume = vol;
+      if (vol >= targetVol) clearInterval(iv);
+    }, 150);
+  }).catch(() => {
+    // Autoplay bloqué — on attend un clic
+    _audioReady = false;
+    const handler = () => {
+      if (_legacyAudio) {
+        _legacyAudio.play().catch(() => {});
+        let vol = 0;
+        const step = targetVol / 60;
+        const iv = setInterval(() => {
+          vol = Math.min(vol + step, targetVol);
+          if (_legacyAudio) _legacyAudio.volume = vol;
+          if (vol >= targetVol) clearInterval(iv);
+        }, 150);
+      }
+    };
+    document.addEventListener('click', handler, { once: true });
+    document.addEventListener('keydown', handler, { once: true });
+  });
+}
 
 function playLegacyTheme(targetVol = 0.7) {
-  try {
-    if (_legacyAudio) { _legacyAudio.pause(); _legacyAudio = null; }
-    
-    // Try /public/legacy_theme.mp3 then fallback paths
-    const paths = ['/legacy_theme.mp3', '/public/legacy_theme.mp3'];
-    const audio = new Audio(paths[0]);
-    audio.volume = 0;
-    _legacyAudio = audio;
-    
-    const startFade = () => {
-      let vol = 0;
-      const step = targetVol / 80;
-      const fadeIn = setInterval(() => {
-        vol = Math.min(vol + step, targetVol);
-        if (_legacyAudio) _legacyAudio.volume = vol;
-        if (vol >= targetVol) clearInterval(fadeIn);
-      }, 100);
-    };
-    
-    audio.addEventListener('canplaythrough', startFade, { once: true });
-    audio.addEventListener('error', (e) => {
-      console.warn('Legacy audio load error:', e);
-      // Try fallback path
-      if (_legacyAudio) {
-        _legacyAudio.src = paths[1];
-        _legacyAudio.load();
-        _legacyAudio.play().catch(() => {});
-      }
-    }, { once: true });
-    
-    audio.load();
-    audio.play().catch(() => {
-      // Autoplay blocked — will play on next interaction
-      document.addEventListener('click', () => {
-        if (_legacyAudio && _legacyAudio.paused) {
-          _legacyAudio.play().catch(() => {});
-        }
-      }, { once: true });
-    });
-    
-    return audio;
-  } catch (e) { console.warn('Audio error', e); }
+  _audioReady = false;
+  initAudioOnInteraction(targetVol);
 }
 
 function stopLegacyTheme() {
-  if (_legacyAudio) { _legacyAudio.pause(); _legacyAudio = null; }
+  if (_legacyAudio) {
+    // Fade out then stop
+    const iv = setInterval(() => {
+      if (!_legacyAudio) { clearInterval(iv); return; }
+      _legacyAudio.volume = Math.max(_legacyAudio.volume - 0.05, 0);
+      if (_legacyAudio.volume <= 0) { _legacyAudio.pause(); _legacyAudio = null; clearInterval(iv); }
+    }, 80);
+  }
+  _audioReady = false;
 }
 const PROJECTS = [
   { label: 'Directeur Général', org: 'Globe Oil', icon: '🛢️', color: '#C9A84C' },
