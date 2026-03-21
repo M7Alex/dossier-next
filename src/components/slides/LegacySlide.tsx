@@ -28,10 +28,10 @@ function setLegacyVolume(vol: number) {
 }
 
 const PROJECTS = [
-  { label: 'Directeur Général', org: 'Globe Oil', icon: '🛢️', color: '#C9A84C' },
-  { label: 'Directeur Associé', org: 'LS Avocat', icon: '⚖️', color: '#8B9DC3' },
   { label: 'Co-Patron', org: 'Hen House', icon: '🍗', color: '#C97A4C' },
-  { label: 'Chef du Pôle Conseil', org: 'Dpt. Finances', icon: '★', color: '#C9A84C' },
+  { label: 'Co-Patron', org: 'Globe Oil', icon: '🛢️', color: '#C9A84C' },
+  { label: 'Directeur Associé', org: 'LS Avocat', icon: '⚖️', color: '#8B9DC3' },
+  { label: 'CO-DOF', org: 'Dept. Finances', icon: '★', color: '#C9A84C' },
 ];
 
 const CREDITS = [
@@ -77,9 +77,9 @@ export default function LegacySlide({ isActive }: { isActive: boolean }) {
         clearInterval(iv);
         setTimeout(() => setPhase('character'), 500);
       }
-    }, 700);
-    const t5 = setTimeout(() => setPhase('title'), 900 + PROJECTS.length * 700 + 1400);
-    const t6 = setTimeout(() => setPhase('credits'), 900 + PROJECTS.length * 700 + 4000);
+    }, 1400);
+    const t5 = setTimeout(() => setPhase('title'), 900 + PROJECTS.length * 1400 + 1400);
+    const t6 = setTimeout(() => setPhase('credits'), 900 + PROJECTS.length * 1400 + 4000);
     return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t5); clearTimeout(t6); clearInterval(iv); };
   }, [isActive]);
 
