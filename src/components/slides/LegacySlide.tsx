@@ -7,60 +7,31 @@ const STARK_IMG = "data:image/png;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1B
 
 // ── Legacy cinematic theme — Star Citizen orchestral mix ──
 let _legacyAudio: HTMLAudioElement | null = null;
-let _audioReady = false;
 
-function initAudioOnInteraction(targetVol: number) {
-  if (_audioReady) return;
-  _audioReady = true;
-  
-  const audio = new Audio('/legacy_theme.mp3');
-  _legacyAudio = audio;
-  audio.volume = 0;
-  
-  audio.play().then(() => {
-    // Success — fade in
-    let vol = 0;
-    const step = targetVol / 60;
-    const iv = setInterval(() => {
-      vol = Math.min(vol + step, targetVol);
-      if (_legacyAudio) _legacyAudio.volume = vol;
-      if (vol >= targetVol) clearInterval(iv);
-    }, 150);
-  }).catch(() => {
-    // Autoplay bloqué — on attend un clic
-    _audioReady = false;
-    const handler = () => {
-      if (_legacyAudio) {
-        _legacyAudio.play().catch(() => {});
-        let vol = 0;
-        const step = targetVol / 60;
-        const iv = setInterval(() => {
-          vol = Math.min(vol + step, targetVol);
-          if (_legacyAudio) _legacyAudio.volume = vol;
-          if (vol >= targetVol) clearInterval(iv);
-        }, 150);
-      }
-    };
-    document.addEventListener('click', handler, { once: true });
-    document.addEventListener('keydown', handler, { once: true });
-  });
+function createAudio(vol: number) {
+  if (_legacyAudio) { _legacyAudio.pause(); _legacyAudio = null; }
+  const a = new Audio('/legacy_theme.mp3');
+  a.volume = 0;
+  _legacyAudio = a;
+  a.play().then(() => {
+    let v = 0; const step = vol / 50;
+    const iv = setInterval(() => { v = Math.min(v+step, vol); a.volume=v; if(v>=vol) clearInterval(iv); }, 120);
+  }).catch(()=>{});
 }
 
 function playLegacyTheme(targetVol = 0.7) {
-  _audioReady = false;
-  initAudioOnInteraction(targetVol);
+  createAudio(targetVol);
 }
 
 function stopLegacyTheme() {
   if (_legacyAudio) {
-    // Fade out then stop
+    const a = _legacyAudio;
     const iv = setInterval(() => {
-      if (!_legacyAudio) { clearInterval(iv); return; }
-      _legacyAudio.volume = Math.max(_legacyAudio.volume - 0.05, 0);
-      if (_legacyAudio.volume <= 0) { _legacyAudio.pause(); _legacyAudio = null; clearInterval(iv); }
+      a.volume = Math.max(a.volume - 0.06, 0);
+      if (a.volume <= 0) { a.pause(); clearInterval(iv); }
     }, 80);
+    _legacyAudio = null;
   }
-  _audioReady = false;
 }
 const PROJECTS = [
   { label: 'Directeur Général', org: 'Globe Oil', icon: '🛢️', color: '#C9A84C' },
@@ -94,6 +65,7 @@ type Phase = 'black' | 'flash' | 'panels' | 'character' | 'title' | 'credits';
 export default function LegacySlide({ isActive }: { isActive: boolean }) {
   const [phase, setPhase] = useState<Phase>('black');
   const [panelIdx, setPanelIdx] = useState(0);
+  const [audioPlaying, setAudioPlaying] = useState(false);
   const startedRef = useRef(false);
 
   useEffect(() => {
@@ -101,6 +73,7 @@ export default function LegacySlide({ isActive }: { isActive: boolean }) {
     startedRef.current = true;
     const { volumeLevel } = useDossier.getState();
     playLegacyTheme(volumeLevel / 100);
+    setAudioPlaying(true);
     const t1 = setTimeout(() => setPhase('flash'), 400);
     const t2 = setTimeout(() => { setPhase('panels'); setPanelIdx(0); }, 900);
     let pi = 0;
@@ -237,7 +210,7 @@ export default function LegacySlide({ isActive }: { isActive: boolean }) {
 
           {/* RIGHT — Title */}
           {(phase === 'title' || phase === 'credits') && (
-            <div style={{ position:'absolute', right:'5%', top:'50%', transform:'translateY(-50%)',
+            <div style={{ position:'absolute', right:'5%', top:'8%',
               zIndex:15, display:'flex', flexDirection:'column', alignItems:'flex-end', gap:0 }}>
               
               <motion.div initial={{opacity:0,x:120,skewX:-8}} animate={{opacity:1,x:0,skewX:0}}
@@ -292,41 +265,66 @@ export default function LegacySlide({ isActive }: { isActive: boolean }) {
             </div>
           )}
 
-          {/* CREDITS */}
+          {/* CREDITS — positioned below title on the right, no overlap */}
           {phase === 'credits' && (
             <motion.div initial={{opacity:0}} animate={{opacity:1}} transition={{duration:0.6}}
-              style={{ position:'absolute', bottom:0, left:'46%', right:'3%', zIndex:18,
-                height:'48%', overflow:'hidden',
-                background:'linear-gradient(180deg,transparent,rgba(0,0,0,0.88) 25%)' }}>
-              <div style={{ padding:'0 32px' }}>
+              style={{ position:'absolute', bottom:0, left:'44%', right:'3%', zIndex:18,
+                top:'58%', overflow:'hidden',
+                background:'linear-gradient(180deg,transparent 0%,rgba(0,0,0,0.75) 15%)' }}>
+              <div style={{ padding:'0 28px', paddingTop:8 }}>
                 <div style={{ fontFamily:'"Share Tech Mono",monospace', fontSize:9,
-                  color:'rgba(201,168,76,0.35)', letterSpacing:5, textTransform:'uppercase',
-                  textAlign:'center', marginBottom:16, paddingBottom:10,
-                  borderBottom:'1px solid rgba(201,168,76,0.08)' }}>
+                  color:'rgba(201,168,76,0.3)', letterSpacing:5, textTransform:'uppercase',
+                  textAlign:'center', marginBottom:10, paddingBottom:8,
+                  borderBottom:'1px solid rgba(201,168,76,0.07)' }}>
                   Rôles & Parcours
                 </div>
                 <motion.div
-                  animate={{ y:[0, -(CREDITS.length * 36 + 40)] }}
-                  transition={{ duration:CREDITS.length*1.6, ease:'linear', repeat:Infinity, delay:0.4 }}
-                  style={{ display:'flex', flexDirection:'column', gap:2 }}>
+                  animate={{ y:[0, -(CREDITS.length * 32 + 30)] }}
+                  transition={{ duration:CREDITS.length*1.4, ease:'linear', repeat:Infinity, delay:0.4 }}
+                  style={{ display:'flex', flexDirection:'column', gap:0 }}>
                   {[...CREDITS,...CREDITS].map((c,i) => (
                     <div key={i} style={{ display:'flex', justifyContent:'space-between',
-                      alignItems:'center', padding:'6px 0',
-                      borderBottom:'1px solid rgba(201,168,76,0.035)' }}>
-                      <span style={{ fontFamily:'"Share Tech Mono",monospace', fontSize:11,
-                        color:'rgba(255,255,255,0.4)', letterSpacing:1 }}>{c.role}</span>
-                      <span style={{ fontFamily:'Cinzel,serif', fontSize:11,
-                        color:'rgba(201,168,76,0.6)', letterSpacing:2 }}>{c.org}</span>
+                      alignItems:'center', padding:'5px 0',
+                      borderBottom:'1px solid rgba(201,168,76,0.03)' }}>
+                      <span style={{ fontFamily:'"Share Tech Mono",monospace', fontSize:10,
+                        color:'rgba(255,255,255,0.35)', letterSpacing:1 }}>{c.role}</span>
+                      <span style={{ fontFamily:'Cinzel,serif', fontSize:10,
+                        color:'rgba(201,168,76,0.55)', letterSpacing:2 }}>{c.org}</span>
                     </div>
                   ))}
-                  <div style={{ textAlign:'center', padding:'18px 0',
-                    fontFamily:'Cinzel,serif', fontSize:13, color:'rgba(201,168,76,0.35)',
+                  <div style={{ textAlign:'center', padding:'14px 0',
+                    fontFamily:'Cinzel,serif', fontSize:12, color:'rgba(201,168,76,0.3)',
                     letterSpacing:5, textTransform:'uppercase' }}>★  FIN  ★</div>
                 </motion.div>
               </div>
             </motion.div>
           )}
         </>
+      )}
+
+      {/* Play/Pause button — visible on character/title/credits phases */}
+      {showBg && (
+        <button
+          onClick={() => {
+            if (_legacyAudio && !_legacyAudio.paused) {
+              _legacyAudio.pause();
+              setAudioPlaying(false);
+            } else if (_legacyAudio && _legacyAudio.paused) {
+              _legacyAudio.play();
+              setAudioPlaying(true);
+            } else {
+              const { volumeLevel } = useDossier.getState();
+              playLegacyTheme(volumeLevel / 100);
+              setAudioPlaying(true);
+            }
+          }}
+          style={{ position:'absolute', top:20, left:20, zIndex:50,
+            background:'rgba(201,168,76,0.1)', border:'1px solid rgba(201,168,76,0.3)',
+            color:'#C9A84C', borderRadius:4, padding:'6px 14px',
+            fontFamily:'"Share Tech Mono",monospace', fontSize:11,
+            letterSpacing:2, cursor:'pointer', textTransform:'uppercase' }}>
+          {audioPlaying ? '⏸ Pause' : '▶ Son'}
+        </button>
       )}
 
       {/* Vignette */}
