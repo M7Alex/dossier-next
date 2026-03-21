@@ -20,411 +20,499 @@ function launchConfetti() {
   }
 }
 
-// ─────────────────────────────────────────────────────────
-// DESSIN AIGLE (fonction standalone, bezier holographique)
-// ─────────────────────────────────────────────────────────
-function strokeEagle(ctx: CanvasRenderingContext2D, s: number) {
-  // Corps principal
-  ctx.beginPath();
-  // Aile gauche — top
-  ctx.moveTo(-s*1.08, s*0.07);
-  ctx.bezierCurveTo(-s*0.80, -s*0.13, -s*0.46, -s*0.21, -s*0.20, -s*0.07);
-  // Vers le cou
-  ctx.bezierCurveTo(-s*0.10, -s*0.02, -s*0.04, s*0.02, 0, s*0.04);
-  // Aile droite — top
-  ctx.bezierCurveTo(s*0.04, s*0.02, s*0.10, -s*0.02, s*0.20, -s*0.07);
-  ctx.bezierCurveTo(s*0.46, -s*0.21, s*0.80, -s*0.13, s*1.08, s*0.07);
-  // Aile droite — bottom
-  ctx.bezierCurveTo(s*0.80, s*0.19, s*0.50, s*0.17, s*0.20, s*0.11);
-  // Corps bas
-  ctx.bezierCurveTo(s*0.10, s*0.15, s*0.06, s*0.22, s*0.05, s*0.30);
-  // Queue droite
-  ctx.lineTo(s*0.16, s*0.46);
-  ctx.lineTo(0, s*0.36);
-  // Queue gauche
-  ctx.lineTo(-s*0.16, s*0.46);
-  ctx.lineTo(-s*0.05, s*0.30);
-  // Corps bas gauche
-  ctx.bezierCurveTo(-s*0.06, s*0.22, -s*0.10, s*0.15, -s*0.20, s*0.11);
-  // Aile gauche — bottom
-  ctx.bezierCurveTo(-s*0.50, s*0.17, -s*0.80, s*0.19, -s*1.08, s*0.07);
-  ctx.stroke();
-  // Tête
-  ctx.beginPath();
-  ctx.arc(s*0.10, -s*0.23, s*0.10, 0, Math.PI*2);
-  ctx.stroke();
-  // Bec
-  ctx.beginPath();
-  ctx.moveTo(s*0.20, -s*0.22);
-  ctx.lineTo(s*0.31, -s*0.18);
-  ctx.lineTo(s*0.20, -s*0.14);
-  ctx.stroke();
-  // Cou
-  ctx.beginPath();
-  ctx.moveTo(s*0.04, -s*0.14);
-  ctx.quadraticCurveTo(s*0.02, -s*0.05, 0, s*0.04);
-  ctx.stroke();
+// ─── Eagle silhouette (normalized, single closed polyline, top→clockwise) ───
+const EP: [number, number][] = [
+  // Head arc (approx, top → clockwise)
+  [0.08,-0.34],[0.14,-0.32],[0.19,-0.27],[0.21,-0.20],
+  // Beak
+  [0.29,-0.20],[0.34,-0.17],[0.22,-0.13],
+  // Head bottom / neck right
+  [0.19,-0.13],[0.13,-0.06],[0.23,-0.03],
+  // Right wing top sweep (outer)
+  [0.40,-0.14],[0.60,-0.22],[0.80,-0.19],[1.00,-0.10],[1.10,0.04],
+  // Right wing tip bottom
+  [1.07,0.11],[0.90,0.18],
+  // Right wing bottom inward
+  [0.68,0.17],[0.46,0.13],[0.22,0.09],
+  // Body right
+  [0.13,0.16],[0.08,0.25],[0.05,0.33],
+  // Right tail feather
+  [0.16,0.47],[0.07,0.38],
+  // Center bottom
+  [0.00,0.43],
+  // Left tail feather
+  [-0.07,0.38],[-0.16,0.47],
+  // Body left
+  [-0.05,0.33],[-0.08,0.25],[-0.13,0.16],[-0.22,0.09],
+  // Left wing bottom
+  [-0.46,0.13],[-0.68,0.17],[-0.90,0.18],[-1.07,0.11],
+  // Left wing tip
+  [-1.10,0.04],[-1.00,-0.10],[-0.80,-0.19],[-0.60,-0.22],[-0.40,-0.14],
+  // Neck left
+  [-0.23,-0.03],[-0.13,-0.06],[-0.19,-0.13],[-0.22,-0.20],
+  // Head left arc
+  [-0.21,-0.27],[-0.14,-0.32],[-0.08,-0.34],
+];
+
+// Cumulative path length at each point (for lineDash reveal top→bottom)
+function buildPathData(pts: [number,number][], S: number) {
+  const lens: number[] = [0];
+  for (let i = 1; i < pts.length; i++) {
+    const dx = (pts[i][0] - pts[i-1][0]) * S;
+    const dy = (pts[i][1] - pts[i-1][1]) * S;
+    lens.push(lens[i-1] + Math.hypot(dx, dy));
+  }
+  return { total: lens[lens.length-1], lens };
 }
 
-// ─────────────────────────────────────────────────────────
-// GLOBE + AIGLE UNIFIÉ — animation de constitution 3D
-// ─────────────────────────────────────────────────────────
-function GlobeEagleCanvas({
-  phase, onEagleDone,
-}: {
-  phase: Phase;
-  onEagleDone: () => void;
-}) {
+// ─────────────────────────────────────────────────────────────
+// GLOBE + EAGLE CANVAS — everything in one unified canvas
+// ─────────────────────────────────────────────────────────────
+function GlobeEagleCanvas({ phase, onEagleDone }: { phase: Phase; onEagleDone: () => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const animRef   = useRef<number>(0);
-  const startRef  = useRef<number>(0);
+  const rafRef    = useRef<number>(0);
+  const t0Ref     = useRef<number>(0);
   const doneRef   = useRef(false);
+  const angleRef  = useRef(0);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    const ctx = canvas.getContext('2d')!;
 
-    const resize = () => {
-      canvas.width  = window.innerWidth;
-      canvas.height = window.innerHeight;
-    };
-    resize();
-    window.addEventListener('resize', resize);
-    startRef.current = performance.now();
-    doneRef.current  = false;
+    const setSize = () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; };
+    setSize();
+    window.addEventListener('resize', setSize);
+    t0Ref.current = performance.now();
+    doneRef.current = false;
 
-    // ── Paramètres globe (Fibonacci lattice) ──
+    // ─── Globe sphere points (Fibonacci lattice) ───
     const N  = 200;
     const GR = (1 + Math.sqrt(5)) / 2;
-    type SP  = { lat:number; lon:number; size:number; hub:boolean };
-    const pts: SP[] = Array.from({ length: N }, (_, i) => ({
-      lat:  Math.acos(1 - 2*(i+0.5)/N),
-      lon:  2*Math.PI*i/GR,
-      size: Math.random() < 0.08 ? 3.2 : Math.random() < 0.22 ? 1.9 : 1.0,
-      hub:  Math.random() < 0.08,
+    type SP = { lat: number; lon: number; sz: number; hub: boolean };
+    const SPTS: SP[] = Array.from({ length: N }, (_, i) => ({
+      lat: Math.acos(1 - 2*(i+0.5)/N),
+      lon: 2*Math.PI*i/GR,
+      sz:  Math.random() < 0.07 ? 3.0 : Math.random() < 0.22 ? 1.8 : 1.0,
+      hub: Math.random() < 0.07,
     }));
 
-    let globeAngle = 0;
-    // Eagle path reveal — longueur totale approximative
-    const EAGLE_DASH_LEN = 8000;
+    // ─── Fragment seed data (computed once) ───
+    // Each fragment: starts on screen edge, flies to globe or eagle target
+    type FragSeed = {
+      edge: number; edgePos: number;      // which edge + position along it
+      noise: number;                       // lateral noise
+      isGold: boolean;                     // gold=eagle, cyan=globe
+      sptIdx: number; epIdx: number;       // target indices
+      delay: number;                       // stagger delay [0..0.40]
+      shape: 0|1|2;                        // 0=dot 1=arc 2=line
+      angle: number; size: number;
+    };
+    const FRAG_N = 160;
+    const seeds: FragSeed[] = Array.from({ length: FRAG_N }, (_, i) => ({
+      edge:    Math.floor(Math.random()*4) as 0|1|2|3,
+      edgePos: Math.random(),
+      noise:   (Math.random()-0.5)*60,
+      isGold:  i < 55,
+      sptIdx:  Math.floor(Math.random()*N),
+      epIdx:   Math.floor(Math.random()*EP.length),
+      delay:   Math.random()*0.38,
+      shape:   (Math.floor(Math.random()*3)) as 0|1|2,
+      angle:   Math.random()*Math.PI*2,
+      size:    1.3 + Math.random()*2.2,
+    }));
 
-    // ease
-    const eO  = (t:number) => 1 - Math.pow(1-t, 3);
-    const eIO = (t:number) => t<0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2,3)/2;
-    const c01 = (v:number, a:number, b:number) => Math.max(0, Math.min(1, (v-a)/(b-a)));
+    // ─── Easing helpers ───
+    const eO  = (t: number) => 1 - Math.pow(Math.max(0,Math.min(1,1-t)), 3);
+    const eIO = (t: number) => {
+      t = Math.max(0,Math.min(1,t));
+      return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2,3)/2;
+    };
+    const c01 = (t: number, a: number, b: number) =>
+      eO(Math.max(0, Math.min(1, (t-a)/(b-a))));
 
-    // ── Halo doux (sans bord dur) ──
-    const softGlow = (
-      rcx:number, rcy:number, r0:number, r1:number,
-      R:number, G:number, B:number, maxA:number
-    ) => {
-      const g = ctx.createRadialGradient(rcx,rcy,r0, rcx,rcy,r1);
-      g.addColorStop(0,   `rgba(${R},${G},${B},0)`);
-      g.addColorStop(0.45,`rgba(${R},${G},${B},${maxA*0.45})`);
-      g.addColorStop(0.75,`rgba(${R},${G},${B},${maxA*0.18})`);
-      g.addColorStop(1,   `rgba(${R},${G},${B},0)`);
-      ctx.beginPath();
-      ctx.arc(rcx, rcy, r1, 0, Math.PI*2);
-      ctx.fillStyle = g;
-      ctx.fill();
+    // ─── Radial soft glow (no hard edge) ───
+    const rGlow = (cx2:number,cy2:number,r0:number,r1:number,R:number,G:number,B:number,a:number) => {
+      const g = ctx.createRadialGradient(cx2,cy2,r0, cx2,cy2,r1);
+      g.addColorStop(0.00, `rgba(${R},${G},${B},${a})`);
+      g.addColorStop(0.45, `rgba(${R},${G},${B},${a*0.40})`);
+      g.addColorStop(0.75, `rgba(${R},${G},${B},${a*0.12})`);
+      g.addColorStop(1.00, `rgba(${R},${G},${B},0)`);
+      ctx.beginPath(); ctx.arc(cx2,cy2,r1,0,Math.PI*2);
+      ctx.fillStyle = g; ctx.fill();
     };
 
-    const draw = (now: number) => {
+    // ─── Orbital ring (soft multi-layer stroke) ───
+    const softRing = (cx2:number,cy2:number,rx:number,ry:number,rot:number,gold:boolean,a:number) => {
+      if (a < 0.005) return;
+      const c = gold ? '201,168,76' : '80,200,200';
+      ctx.save();
+      ctx.translate(cx2,cy2);
+      ctx.rotate(rot);
+      [[8,0.03],[4,0.06],[1.4,0.16]].forEach(([lw,la]) => {
+        ctx.beginPath();
+        ctx.ellipse(0,0,rx,ry,0,0,Math.PI*2);
+        ctx.strokeStyle = `rgba(${c},${(la as number)*a})`;
+        ctx.lineWidth   = lw as number;
+        ctx.stroke();
+      });
+      ctx.restore();
+    };
+
+    const DURATION = phase === 'eagle' ? 8500 : 999_999;
+
+    const draw = (ts: number) => {
       const W  = canvas.width;
       const H  = canvas.height;
       const cx = W/2, cy = H/2;
-      const R  = Math.min(W,H) * 0.285;
-      const elapsed = now - startRef.current;
-      const TOTAL   = phase==='eagle' ? 6200 : 99999999;
-      const t       = elapsed / TOTAL; // 0→1
-
+      const R  = Math.min(W,H) * 0.27;
+      const el = ts - t0Ref.current;
+      const t  = Math.min(el / DURATION, 1.0);
       ctx.clearRect(0,0,W,H);
-      globeAngle += 0.003;
-      const ga = globeAngle;
-      const tilt = 0.30;
 
-      // Projeter un point 3D sphère → 2D canvas
-      const proj = (lat:number, lon:number) => {
+      // ─── Timeline (all 0→1) ───
+      const globeP = c01(t, 0.00, 0.52);  // globe builds       0–4.4s
+      const gridP  = c01(t, 0.02, 0.50);  // grid appears
+      const orbP   = c01(t, 0.06, 0.48);  // orbitals
+      const fragP  = c01(t, 0.00, 0.52);  // fragments fly in
+      const eagleP = c01(t, 0.26, 0.74);  // eagle descends     2.2–6.3s
+      const traceP = c01(t, 0.36, 0.82);  // path traces        3.1–7.0s
+      const mergeP = eIO(c01(t, 0.76, 0.94)); // fusion          6.5–8.0s
+      const holdP  = c01(t, 0.92, 1.00);
+
+      angleRef.current += 0.0028;
+      const ga   = angleRef.current;
+      const TILT = 0.28;
+
+      // 3D → 2D projection
+      const proj = (lat: number, lon: number) => {
         const cL = Math.sin(lat), sL = Math.cos(lat);
-        const x3 = cL*Math.cos(lon+ga);
-        const z3 = cL*Math.sin(lon+ga);
-        const y3 = sL;
-        const y2 = y3*Math.cos(tilt) - z3*Math.sin(tilt);
-        const z2 = y3*Math.sin(tilt) + z3*Math.cos(tilt);
-        return { px: cx + x3*R, py: cy - y2*R, z: z2, vis:(z2+1)/2 };
+        const x3 = cL*Math.cos(lon+ga), z3 = cL*Math.sin(lon+ga), y3 = sL;
+        const y2 = y3*Math.cos(TILT) - z3*Math.sin(TILT);
+        const z2 = y3*Math.sin(TILT) + z3*Math.cos(TILT);
+        return { px: cx+x3*R, py: cy-y2*R, z: z2, vis: (z2+1)/2 };
       };
 
-      // ── Timeline (pendant phase eagle uniquement) ──
-      const globeP  = eO(c01(t, 0,    0.42));  // 0→0.42 globe build
-      const gridP   = eO(c01(t, 0.02, 0.40));  // grid draw
-      const eagleP  = eO(c01(t, 0.12, 0.52));  // 0.12→0.52 aigle se forme
-      const moveP   = eIO(c01(t, 0.38, 0.70)); // 0.38→0.70 aigle se déplace
-      const mergeP  = eIO(c01(t, 0.62, 0.88)); // 0.62→0.88 fusion
-      const holdP   = eO(c01(t,  0.88, 1.0));  // hold final
-
-      // Opacité globe (toujours visible, plus discret en pad)
-      const globeAlpha = phase==='eagle' ? globeP : 0.85;
-      const eagleAlpha = phase==='eagle' ? Math.max(0, eagleP * (1 - mergeP*0.95)) : 0;
-
-      // ── 1. Halos atmosphériques DOUX ──
-      softGlow(cx,cy, R*0.15, R*2.4, 30,150,200, 0.11*globeAlpha);
-      softGlow(cx,cy, 0, R*1.2, 60,120,200, 0.07*globeAlpha);
-      // Halo doré (apparaît pendant fusion aigle)
-      if (phase==='eagle' && mergeP > 0) {
-        softGlow(cx,cy, R*0.2, R*1.8, 201,168,76, 0.10*mergeP);
+      // ══ 1. Background: subtle dot grid ══
+      if (gridP > 0.01) {
+        const GS = 36;
+        for (let gx = GS/2; gx < W; gx += GS) {
+          for (let gy = GS/2; gy < H; gy += GS) {
+            const d = Math.hypot(gx-cx, gy-cy);
+            const fade = Math.max(0, 1 - d/(R*3.8));
+            if (fade < 0.04) continue;
+            ctx.globalAlpha = 0.018 * gridP * fade;
+            ctx.fillStyle = 'rgba(80,200,200,1)';
+            ctx.beginPath(); ctx.arc(gx,gy,0.85,0,Math.PI*2); ctx.fill();
+          }
+        }
+        ctx.globalAlpha = 1;
+        // Faint radial lines
+        ctx.globalAlpha = 0.012 * gridP;
+        ctx.strokeStyle = 'rgba(80,200,200,1)'; ctx.lineWidth = 0.38;
+        for (let a = 0; a < Math.PI*2; a += Math.PI/14) {
+          ctx.beginPath();
+          ctx.moveTo(cx+Math.cos(a)*R*0.12, cy+Math.sin(a)*R*0.12);
+          ctx.lineTo(cx+Math.cos(a)*R*3.6,  cy+Math.sin(a)*R*3.6);
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
       }
 
-      // ── 2. Grille lat/lon (se dessine progressivement) ──
-      ctx.globalAlpha = 0.055 * (phase==='eagle' ? gridP : 1);
-      ctx.strokeStyle = '#50C8C8';
-      ctx.lineWidth   = 0.45;
-      const drawLine = (latDeg:number, fixedLon:boolean) => {
-        ctx.beginPath();
-        let first = true;
-        const maxAngle = 360 * (phase==='eagle' ? gridP : 1);
-        for (let a=0; a<=maxAngle; a+=2) {
-          const la = fixedLon ? a * Math.PI/180 - Math.PI/2 : latDeg * Math.PI/180;
-          const lo = fixedLon ? latDeg * Math.PI/180 : a * Math.PI/180;
-          const {px,py,z} = proj(la, lo);
+      // ══ 2. Atmospheric glow layers (soft, NO hard arc stroke) ══
+      const gA = Math.max(0.18, globeP);
+      rGlow(cx,cy, 0,      R*2.6, 30, 150, 200, 0.032*gA);
+      rGlow(cx,cy, 0,      R*1.5, 60, 140, 200, 0.055*gA);
+      rGlow(cx-R*0.1,cy-R*0.1, 0, R*0.9, 80, 190, 220, 0.04*gA);
+      if (mergeP > 0) rGlow(cx,cy, 0, R*2.0, 201,168,76, 0.10*mergeP);
+
+      // ══ 3. Grid lines (lat/lon) — draw progressively ══
+      ctx.lineWidth = 0.42;
+      const gridReveal = gridP;
+      // Latitude
+      for (let ld = -75; ld <= 75; ld += 15) {
+        const isEq = ld === 0;
+        ctx.globalAlpha = (0.048 + (isEq ? 0.04 : 0)) * gridReveal;
+        ctx.strokeStyle  = isEq ? '#50C8C8' : 'rgba(80,200,200,1)';
+        ctx.beginPath(); let first = true;
+        const maxL = 360 * gridReveal;
+        for (let lo = 0; lo <= maxL; lo += 2.5) {
+          const {px,py,z} = proj(ld*Math.PI/180, lo*Math.PI/180);
           if (z < -0.04) { first=true; continue; }
           if (first) { ctx.moveTo(px,py); first=false; } else ctx.lineTo(px,py);
         }
         ctx.stroke();
-      };
-      for (let lat=-80;lat<=80;lat+=20) drawLine(lat, false);
-      for (let lon=0;lon<360;lon+=20) drawLine(lon, true);
+      }
+      // Longitude
+      for (let lo = 0; lo < 360; lo += 15) {
+        ctx.globalAlpha = 0.042 * gridReveal;
+        ctx.strokeStyle = 'rgba(80,200,200,1)';
+        ctx.beginPath(); let first = true;
+        for (let ld = -86; ld <= 86; ld += 3) {
+          const {px,py,z} = proj(ld*Math.PI/180, lo*Math.PI/180);
+          if (z < -0.04) { first=true; continue; }
+          if (first) { ctx.moveTo(px,py); first=false; } else ctx.lineTo(px,py);
+        }
+        ctx.stroke();
+      }
       ctx.globalAlpha = 1;
 
-      // ── 3. Points + connexions ──
-      const visible = Math.floor(N * (phase==='eagle' ? globeP : 1));
-      type PP = { px:number;py:number;z:number;vis:number;hub:boolean;size:number };
+      // ══ 4. Globe nodes & hub connections ══
+      const visN = Math.min(N, Math.floor(N * Math.pow(globeP, 0.55)));
+      type PP = { px:number; py:number; z:number; vis:number; hub:boolean; sz:number };
       const pps: PP[] = [];
-      for (let i=0;i<visible;i++) {
-        const p   = pts[i];
-        const {px,py,z,vis} = proj(p.lat,p.lon);
-        pps.push({px,py,z,vis,hub:p.hub,size:p.size});
+      for (let i = 0; i < visN; i++) {
+        const sp = SPTS[i];
+        const pp = proj(sp.lat, sp.lon);
+        pps.push({ ...pp, hub: sp.hub, sz: sp.sz });
       }
-      pps.sort((a,b)=>a.z-b.z);
+      pps.sort((a,b) => a.z - b.z);
 
-      // Connexions normales
-      for (let i=0;i<pps.length;i++) {
-        const a=pps[i]; if(a.z<0) continue;
-        for (let j=i+1;j<pps.length;j++) {
-          const b=pps[j]; if(b.z<0) continue;
-          const d=Math.hypot(a.px-b.px,a.py-b.py);
-          const md=R*0.25;
-          if (d<md) {
-            const al=Math.min(a.vis,b.vis)*0.22*(1-d/md)*globeAlpha;
-            ctx.beginPath();
-            ctx.strokeStyle=`rgba(80,200,200,${al})`;
-            ctx.lineWidth=0.4;
-            ctx.moveTo(a.px,a.py); ctx.lineTo(b.px,b.py);
-            ctx.stroke();
+      // Normal connections (cyan, thin)
+      for (let i = 0; i < pps.length; i++) {
+        const a = pps[i]; if (a.z < 0) continue;
+        for (let j = i+1; j < pps.length; j++) {
+          const b = pps[j]; if (b.z < 0) continue;
+          const d = Math.hypot(a.px-b.px, a.py-b.py);
+          const md = R*0.22;
+          if (d < md) {
+            ctx.globalAlpha = Math.min(a.vis,b.vis)*0.16*(1-d/md);
+            ctx.beginPath(); ctx.strokeStyle='rgba(80,200,200,1)'; ctx.lineWidth=0.4;
+            ctx.moveTo(a.px,a.py); ctx.lineTo(b.px,b.py); ctx.stroke();
           }
         }
       }
+      ctx.globalAlpha = 1;
 
-      // Connexions hubs (dorées + particule animée)
-      const hubs = pps.filter(p=>p.hub&&p.z>0);
-      for (let i=0;i<hubs.length;i++) {
-        for (let j=i+1;j<hubs.length;j++) {
-          const a=hubs[i],b=hubs[j];
-          const d=Math.hypot(a.px-b.px,a.py-b.py);
-          if (d<R*0.62) {
-            const al=Math.min(a.vis,b.vis)*0.45*(1-d/(R*0.62))*globeAlpha*(0.5+mergeP*0.5);
-            const lg=ctx.createLinearGradient(a.px,a.py,b.px,b.py);
-            lg.addColorStop(0,`rgba(201,168,76,${al})`);
-            lg.addColorStop(.5,`rgba(80,200,200,${al*0.7})`);
-            lg.addColorStop(1,`rgba(201,168,76,${al})`);
-            ctx.beginPath(); ctx.strokeStyle=lg; ctx.lineWidth=0.9;
+      // Hub connections (gold + animated particle)
+      const hubs = pps.filter(p => p.hub && p.z > 0.04);
+      for (let i = 0; i < hubs.length; i++) {
+        for (let j = i+1; j < hubs.length; j++) {
+          const a = hubs[i], b = hubs[j];
+          const d = Math.hypot(a.px-b.px, a.py-b.py);
+          if (d < R*0.68) {
+            const al = Math.min(a.vis,b.vis)*0.40*(1-d/(R*0.68));
+            const lg = ctx.createLinearGradient(a.px,a.py,b.px,b.py);
+            lg.addColorStop(0, `rgba(201,168,76,${al})`);
+            lg.addColorStop(.5,`rgba(80,200,200,${al*0.6})`);
+            lg.addColorStop(1, `rgba(201,168,76,${al})`);
+            ctx.beginPath(); ctx.strokeStyle=lg; ctx.lineWidth=0.95;
             ctx.moveTo(a.px,a.py); ctx.lineTo(b.px,b.py); ctx.stroke();
-            const tp=((elapsed/1400)+i*0.3+j*0.18)%1;
-            const mx=a.px+(b.px-a.px)*tp,my=a.py+(b.py-a.py)*tp;
-            ctx.beginPath(); ctx.arc(mx,my,1.6,0,Math.PI*2);
-            ctx.fillStyle=`rgba(201,168,76,${al*2})`;
-            ctx.shadowColor='#C9A84C'; ctx.shadowBlur=7;
+            const tp = ((el/1300)+i*0.28+j*0.16) % 1;
+            const mx = a.px+(b.px-a.px)*tp, my = a.py+(b.py-a.py)*tp;
+            ctx.beginPath(); ctx.arc(mx,my,1.7,0,Math.PI*2);
+            ctx.fillStyle=`rgba(201,168,76,${al*2.2})`;
+            ctx.shadowColor='#C9A84C'; ctx.shadowBlur=9;
             ctx.fill(); ctx.shadowBlur=0;
           }
         }
       }
 
-      // Points sphère
+      // Node points
       for (const p of pps) {
         if (p.z < -0.12) continue;
-        const bonusGold = mergeP * 0.4; // les hubs deviennent plus dorés lors de la fusion
         if (p.hub) {
-          ctx.beginPath();
-          ctx.arc(p.px,p.py, p.size*1.5+bonusGold*2, 0, Math.PI*2);
-          ctx.fillStyle=`rgba(201,168,76,${p.vis*(0.75+bonusGold)})`;
-          ctx.shadowColor='#C9A84C'; ctx.shadowBlur=14;
-          ctx.fill(); ctx.shadowBlur=0;
-          // Losange
-          ctx.save(); ctx.translate(p.px,p.py); ctx.rotate(Math.PI/4);
-          ctx.strokeStyle=`rgba(201,168,76,${p.vis*0.5})`;
-          ctx.lineWidth=0.7;
-          const r=p.size*0.8;
-          ctx.strokeRect(-r,-r,r*2,r*2);
+          const pulse = 1 + Math.sin(el/650+p.px*0.05)*0.45;
+          ctx.beginPath(); ctx.arc(p.px,p.py, p.sz*1.5*pulse, 0, Math.PI*2);
+          ctx.fillStyle=`rgba(201,168,76,${p.vis*0.88*(0.65+mergeP*0.35)})`;
+          ctx.shadowColor='#C9A84C'; ctx.shadowBlur=14; ctx.fill(); ctx.shadowBlur=0;
+          // Rotating partial ring around hub
+          ctx.save(); ctx.translate(p.px,p.py); ctx.rotate(el/1400);
+          ctx.beginPath(); ctx.arc(0,0,p.sz*3.0, 0, Math.PI*1.3);
+          ctx.strokeStyle=`rgba(201,168,76,${p.vis*0.28})`; ctx.lineWidth=0.8; ctx.stroke();
           ctx.restore();
         } else {
-          ctx.beginPath();
-          ctx.arc(p.px,p.py, p.size*0.88, 0, Math.PI*2);
+          ctx.beginPath(); ctx.arc(p.px,p.py, p.sz*0.88, 0, Math.PI*2);
           ctx.fillStyle=`rgba(80,200,200,${p.vis*0.72})`;
-          ctx.shadowColor='rgba(80,200,200,0.9)'; ctx.shadowBlur=p.size*4;
+          ctx.shadowColor='rgba(80,200,200,0.9)'; ctx.shadowBlur=p.sz*5;
           ctx.fill(); ctx.shadowBlur=0;
         }
       }
 
-      // ── 4. AIGLE HOLOGRAPHIQUE DORÉ ──
-      if (phase==='eagle' && eagleAlpha > 0.005 && eagleP > 0) {
-        // Position : arrive depuis en haut à gauche
-        const startX = cx - W*0.40, startY = cy - H*0.34;
-        const ax = startX + (cx - startX) * moveP;
-        const ay = startY + (cy - startY) * moveP;
-        // Taille : grandit à mesure qu'il se rapproche et se fond
-        const s  = R * (0.22 + moveP*0.58);
+      // ══ 5. Orbital rings (3 planes, soft multi-layer) ══
+      if (orbP > 0.01) {
+        const a0 = orbP * (0.7 + mergeP*0.3);
+        // Outer cyan ring (slightly tilted)
+        softRing(cx,cy, R*1.28, R*0.25, 0.32,  false, a0*0.75);
+        // Gold ring (more tilted)
+        softRing(cx,cy, R*1.42, R*0.20, 0.95,  true,  a0*0.55);
+        // Third ring (opposite tilt)
+        softRing(cx,cy, R*1.56, R*0.18, -0.48, false, a0*0.40);
+
+        // Animated dots on each ring
+        const rings = [
+          {rx:R*1.28,ry:R*0.25,rot:0.32,speed:0.9, gold:false},
+          {rx:R*1.42,ry:R*0.20,rot:0.95,speed:-0.6,gold:true},
+          {rx:R*1.56,ry:R*0.18,rot:-0.48,speed:0.5,gold:false},
+        ];
+        rings.forEach(ring => {
+          const a = el/1000*ring.speed;
+          ctx.save(); ctx.translate(cx,cy); ctx.rotate(ring.rot);
+          const dx = Math.cos(a)*ring.rx, dy = Math.sin(a)*ring.ry;
+          ctx.restore();
+          const dxF = cx + dx*Math.cos(ring.rot) - dy*Math.sin(ring.rot);
+          const dyF = cy + dx*Math.sin(ring.rot) + dy*Math.cos(ring.rot);
+          ctx.beginPath(); ctx.arc(dxF,dyF,2.8,0,Math.PI*2);
+          const c = ring.gold ? '201,168,76' : '80,200,200';
+          ctx.fillStyle=`rgba(${c},${a0*0.85})`;
+          ctx.shadowColor=`rgba(${c},0.9)`; ctx.shadowBlur=12;
+          ctx.fill(); ctx.shadowBlur=0;
+        });
+      }
+
+      // ══ 6. Fragments flying in from screen edges ══
+      if (fragP > 0.005) {
+        seeds.forEach((s, idx) => {
+          const lP = Math.max(0, (fragP - s.delay) / (1 - s.delay));
+          if (lP <= 0) return;
+          const eP = 1 - Math.pow(1-lP, 2.8);
+
+          // Source pos (screen edge)
+          let sx = 0, sy = 0;
+          switch (s.edge) {
+            case 0: sx = s.edgePos*W;  sy = -25; break;
+            case 1: sx = W+25;         sy = s.edgePos*H; break;
+            case 2: sx = s.edgePos*W;  sy = H+25; break;
+            default:sx = -25;          sy = s.edgePos*H; break;
+          }
+
+          // Target pos
+          let tx = cx, ty = cy;
+          if (s.isGold) {
+            // Eagle outline target
+            const ep = EP[s.epIdx];
+            tx = cx + ep[0]*R*0.72;
+            ty = cy + ep[1]*R*0.72;
+          } else {
+            // Globe surface target
+            const sp = SPTS[s.sptIdx];
+            const {px,py,z} = proj(sp.lat, sp.lon);
+            if (z > -0.1) { tx=px; ty=py; } else { tx=cx; ty=cy; }
+          }
+
+          // Organic path: slight arc via noise
+          const curve = Math.sin(lP*Math.PI) * s.noise;
+          const perp = Math.atan2(ty-sy, tx-sx) + Math.PI/2;
+          const fx = sx + (tx-sx)*eP + Math.cos(perp)*curve*(1-eP);
+          const fy = sy + (ty-sy)*eP + Math.sin(perp)*curve*(1-eP);
+
+          const al = Math.min(1, lP*2.5) * (s.isGold ? 0.78 : 0.58);
+          const col = s.isGold ? `rgba(201,168,76,${al})` : `rgba(80,200,200,${al})`;
+          ctx.globalAlpha = al;
+          if (s.shape === 0) {
+            ctx.beginPath(); ctx.arc(fx,fy,s.size,0,Math.PI*2);
+            ctx.fillStyle=col; ctx.fill();
+          } else if (s.shape === 1) {
+            ctx.beginPath(); ctx.arc(fx,fy,s.size*4.5, s.angle, s.angle+Math.PI*0.45);
+            ctx.strokeStyle=col; ctx.lineWidth=0.95; ctx.stroke();
+          } else {
+            const dx2=Math.cos(s.angle)*s.size*4.5, dy2=Math.sin(s.angle)*s.size*4.5;
+            ctx.beginPath(); ctx.moveTo(fx-dx2,fy-dy2); ctx.lineTo(fx+dx2,fy+dy2);
+            ctx.strokeStyle=col; ctx.lineWidth=0.95; ctx.stroke();
+          }
+          ctx.globalAlpha = 1;
+        });
+      }
+
+      // ══ 7. EAGLE — descends from above, traces outline ══
+      const eagleVis = eagleP * (1 - mergeP);
+      if (eagleVis > 0.004) {
+        const S = R * 0.70;
+        // Descend from above screen
+        const startY = cy - H*0.88;
+        const desP   = eIO(Math.max(0, Math.min(1, eagleP*1.5)));
+        const ay     = startY + (cy - startY) * desP;
 
         ctx.save();
-        ctx.translate(ax, ay);
+        ctx.translate(cx, ay);
 
-        // Halo doré DOUX autour de l'aigle (pas de bord dur)
-        const halo = ctx.createRadialGradient(0,0,s*0.1, 0,0,s*1.6);
-        halo.addColorStop(0,   `rgba(201,168,76,${eagleAlpha*0.14})`);
-        halo.addColorStop(0.5, `rgba(201,168,76,${eagleAlpha*0.07})`);
-        halo.addColorStop(1,   'rgba(201,168,76,0)');
-        ctx.beginPath(); ctx.arc(0,0,s*1.6,0,Math.PI*2);
-        ctx.fillStyle=halo; ctx.fill();
+        // Soft halo around eagle (pure radialGradient, no arc stroke)
+        rGlow(0,0, 0, S*1.9, 201,168,76, eagleVis*0.10);
+        rGlow(0,0, S*0.2, S*1.2, 201,168,76, eagleVis*0.06);
 
-        // Couches de glow (soft, SANS bord dur)
-        const glowLayers = [
-          { width:9, alpha:0.05 },
-          { width:5, alpha:0.09 },
-          { width:2.5, alpha:0.14 },
-        ];
-        ctx.lineCap='round'; ctx.lineJoin='round';
+        // ─ Path reveal via lineDashOffset ─
+        const { total: pLen } = buildPathData(EP, S);
+        ctx.setLineDash([pLen]);
+        ctx.lineDashOffset = pLen * (1 - Math.min(traceP*1.1, 1));
+        ctx.lineCap = 'round'; ctx.lineJoin = 'round';
 
-        // Reveal progressif via lineDashOffset
-        const revealOffset = EAGLE_DASH_LEN*(1-Math.min(eagleP,1));
-        ctx.setLineDash([EAGLE_DASH_LEN]);
-        ctx.lineDashOffset = revealOffset;
-
-        for (const gl of glowLayers) {
-          ctx.lineWidth = gl.width;
-          ctx.strokeStyle = `rgba(201,168,76,${gl.alpha*eagleAlpha})`;
-          strokeEagle(ctx, s);
-        }
-
-        // Trait principal net (gold clair)
-        ctx.lineWidth = 1.4;
-        ctx.strokeStyle = `rgba(235,200,90,${eagleAlpha*0.90})`;
-        strokeEagle(ctx, s);
+        // Draw eagle path — glow layers then main
+        [[9, 0.035], [5, 0.07], [2.6, 0.13]].forEach(([lw, la]) => {
+          ctx.lineWidth   = lw as number;
+          ctx.strokeStyle = `rgba(201,168,76,${(la as number)*eagleVis})`;
+          ctx.beginPath();
+          EP.forEach(([x,y],i) => i===0 ? ctx.moveTo(x*S,y*S) : ctx.lineTo(x*S,y*S));
+          ctx.stroke();
+        });
+        ctx.lineWidth   = 1.5;
+        ctx.strokeStyle = `rgba(235,205,90,${eagleVis*0.92})`;
+        ctx.beginPath();
+        EP.forEach(([x,y],i) => i===0 ? ctx.moveTo(x*S,y*S) : ctx.lineTo(x*S,y*S));
+        ctx.stroke();
 
         ctx.setLineDash([]);
 
-        // Nœuds clés (points lumineux sur l'aigle)
-        const nodes = [
-          {x:0, y:0.04},        // centre corps
-          {x:-0.52, y:0.00},    // milieu aile gauche
-          {x: 0.52, y:0.00},    // milieu aile droite
-          {x:-1.05, y:0.07},    // bout aile gauche
-          {x: 1.05, y:0.07},    // bout aile droite
-          {x: 0.10, y:-0.23},   // tête
-          {x:0,    y: 0.40},    // queue
+        // Key node dots (appear progressively as path traces)
+        const NODES: [number,number][] = [
+          [0.08,-0.34],   // head top
+          [0.34,-0.17],   // beak tip
+          [1.10, 0.04],   // right wing tip
+          [-1.10, 0.04],  // left wing tip
+          [0.00, 0.43],   // tail bottom
+          [0.16, 0.47],   // right tail tip
+          [-0.16, 0.47],  // left tail tip
+          [0.00, 0.00],   // body center
         ];
-        nodes.forEach(({x,y},i) => {
-          const nodeReveal = Math.max(0, eagleP*6 - i*0.3);
-          if (nodeReveal<=0) return;
-          const na = Math.min(1,nodeReveal)*eagleAlpha;
+        NODES.forEach(([nx,ny], ni) => {
+          const np = Math.max(0, traceP*5 - ni*0.5);
+          if (np <= 0) return;
+          const na = Math.min(1,np)*eagleVis;
           ctx.beginPath();
-          ctx.arc(x*s, y*s, 3.5+Math.sin(elapsed/600+i)*0.8, 0, Math.PI*2);
+          ctx.arc(nx*S, ny*S, 3.2 + Math.sin(el/480+ni)*0.9, 0, Math.PI*2);
           ctx.fillStyle=`rgba(201,168,76,${na})`;
           ctx.shadowColor='#C9A84C'; ctx.shadowBlur=18;
           ctx.fill(); ctx.shadowBlur=0;
         });
 
-        // Connexions entre nœuds de l'aigle
-        if (eagleP > 0.4) {
-          const connAlpha = (eagleP-0.4)*1.67*eagleAlpha*0.35;
-          [[0,1],[0,2],[1,3],[2,4],[0,5],[0,6]].forEach(([a,b]) => {
-            const na=nodes[a], nb=nodes[b];
-            ctx.beginPath();
-            ctx.strokeStyle=`rgba(201,168,76,${connAlpha})`;
-            ctx.lineWidth=0.7;
-            ctx.moveTo(na.x*s,na.y*s); ctx.lineTo(nb.x*s,nb.y*s);
-            ctx.stroke();
-          });
-        }
-
         ctx.restore();
       }
 
-      // ── 5. Anneau orbital DOUX ──
-      if ((phase==='eagle' ? globeP : 1) > 0.55) {
-        const ringAlpha = phase==='eagle'
-          ? (globeP-0.55)*2.22*(0.4+mergeP*0.6)
-          : 0.9;
-        ctx.save();
-        ctx.translate(cx,cy);
-        ctx.rotate(0.28);
-        ctx.scale(1, 0.24);
-        // Gradient linéaire → fondu sur les côtés = PAS de bord dur
-        const rg = ctx.createLinearGradient(-R*1.22,0, R*1.22,0);
-        rg.addColorStop(0,    'rgba(201,168,76,0)');
-        rg.addColorStop(0.18, `rgba(201,168,76,${ringAlpha*0.28})`);
-        rg.addColorStop(0.5,  `rgba(201,168,76,${ringAlpha*0.07})`);
-        rg.addColorStop(0.82, `rgba(201,168,76,${ringAlpha*0.28})`);
-        rg.addColorStop(1,    'rgba(201,168,76,0)');
-        ctx.beginPath();
-        ctx.ellipse(0,0, R*1.22,R*1.22, 0,0,Math.PI*2);
-        ctx.strokeStyle=rg; ctx.lineWidth=1.8; ctx.stroke();
-        ctx.restore();
+      // ══ 8. Merge pulse ══
+      if (mergeP > 0) {
+        const pr = R*(0.95 + mergeP*0.18);
+        rGlow(cx,cy, pr*0.7, pr*1.5, 201,168,76, 0.14*mergeP);
+        rGlow(cx,cy, 0, pr*0.9, 255,230,120, 0.06*mergeP);
       }
 
-      // ── Done? ──
-      if (phase==='eagle' && t>=1 && !doneRef.current) {
+      // ══ Done ══
+      if (phase === 'eagle' && t >= 1.0 && !doneRef.current) {
         doneRef.current = true;
         onEagleDone();
       }
-
-      animRef.current = requestAnimationFrame(draw);
+      rafRef.current = requestAnimationFrame(draw);
     };
 
-    animRef.current = requestAnimationFrame(draw);
-    return () => {
-      cancelAnimationFrame(animRef.current);
-      window.removeEventListener('resize', resize);
-    };
+    rafRef.current = requestAnimationFrame(draw);
+    return () => { cancelAnimationFrame(rafRef.current); window.removeEventListener('resize', setSize); };
   }, [phase, onEagleDone]);
 
   return (
-    <canvas
-      ref={canvasRef}
-      style={{
-        position:'absolute', inset:0,
-        width:'100%', height:'100%',
-        pointerEvents:'none',
-        opacity: phase==='holo' ? 0.25 : 1,
-        transition:'opacity 1s ease',
-      }}
-    />
+    <canvas ref={canvasRef} style={{
+      position:'absolute', inset:0, width:'100%', height:'100%', pointerEvents:'none',
+      opacity: phase === 'holo' ? 0.20 : 1,
+      transition: 'opacity 1.4s ease',
+    }}/>
   );
 }
 
-// ─────────────────────────────────────────────────────────
-// CODE BOX
-// ─────────────────────────────────────────────────────────
-function CodeBox({ index, entered, status }: {
-  index:number; entered:string; status:'idle'|'ok'|'err';
-}) {
+// ─── CodeBox ───
+function CodeBox({ index, entered, status }: { index:number; entered:string; status:'idle'|'ok'|'err' }) {
   const isFilled = index < entered.length;
-  const isActive = index === entered.length && status==='idle';
+  const isActive = index === entered.length && status === 'idle';
   const bc = status==='err'?'rgba(192,57,43,0.85)':status==='ok'?'rgba(180,160,80,0.80)':isFilled?'rgba(201,168,76,0.55)':isActive?'rgba(201,168,76,0.85)':'rgba(201,168,76,0.15)';
-  const gc = status==='err'?'rgba(192,57,43,0.3)':status==='ok'?'rgba(201,168,76,0.4)':isActive?'rgba(201,168,76,0.25)':'transparent';
+  const gc = status==='err'?'rgba(192,57,43,0.30)':status==='ok'?'rgba(201,168,76,0.40)':isActive?'rgba(201,168,76,0.25)':'transparent';
   return (
-    <motion.div
-      animate={status==='err'?{x:[-8,8,-6,6,-3,3,0]}:{}}
-      transition={{duration:0.4}}
+    <motion.div animate={status==='err'?{x:[-8,8,-6,6,-3,3,0]}:{}} transition={{duration:0.4}}
       style={{width:54,height:66,display:'flex',alignItems:'center',justifyContent:'center',borderRadius:4,border:`1.5px solid ${bc}`,background:isActive?'rgba(201,168,76,0.06)':'rgba(201,168,76,0.02)',position:'relative',boxShadow:`0 0 18px ${gc}`,transition:'border-color .2s, box-shadow .3s'}}>
       <div style={{position:'absolute',top:3,left:3,width:6,height:6,borderTop:`1px solid ${bc}`,borderLeft:`1px solid ${bc}`,opacity:0.7}}/>
       <div style={{position:'absolute',bottom:3,right:3,width:6,height:6,borderBottom:`1px solid ${bc}`,borderRight:`1px solid ${bc}`,opacity:0.7}}/>
@@ -439,28 +527,23 @@ function CodeBox({ index, entered, status }: {
   );
 }
 
-// ─────────────────────────────────────────────────────────
-// NUM KEY
-// ─────────────────────────────────────────────────────────
+// ─── NumKey ───
 function NumKey({ digit, onClick }: { digit:string; onClick:()=>void }) {
-  const [pressed, setPressed] = useState(false);
+  const [p, setP] = useState(false);
   return (
     <motion.button
-      onPointerDown={()=>{setPressed(true);onClick();}}
-      onPointerUp={()=>setPressed(false)}
-      onPointerLeave={()=>setPressed(false)}
-      animate={pressed?{scale:0.88}:{scale:1}}
-      transition={{type:'spring',stiffness:600,damping:25}}
-      style={{fontFamily:'Share Tech Mono,monospace',fontSize:18,fontWeight:600,padding:'12px 0',borderRadius:4,width:'100%',background:pressed?'rgba(201,168,76,0.14)':'rgba(201,168,76,0.04)',border:`1px solid ${pressed?'rgba(201,168,76,0.45)':'rgba(201,168,76,0.14)'}`,color:pressed?'#E8C97A':'#A89878',cursor:'pointer',userSelect:'none',position:'relative',overflow:'hidden',transition:'box-shadow .12s, color .12s'}}>
-      {pressed&&<motion.div initial={{scale:0,opacity:0.6}} animate={{scale:3,opacity:0}} transition={{duration:0.4}} style={{position:'absolute',top:'50%',left:'50%',width:30,height:30,borderRadius:'50%',background:'rgba(201,168,76,0.3)',transform:'translate(-50%,-50%)',pointerEvents:'none'}}/>}
+      onPointerDown={()=>{setP(true);onClick();}} onPointerUp={()=>setP(false)} onPointerLeave={()=>setP(false)}
+      animate={p?{scale:0.88}:{scale:1}} transition={{type:'spring',stiffness:600,damping:25}}
+      style={{fontFamily:'Share Tech Mono,monospace',fontSize:18,fontWeight:600,padding:'12px 0',borderRadius:4,width:'100%',background:p?'rgba(201,168,76,0.14)':'rgba(201,168,76,0.04)',border:`1px solid ${p?'rgba(201,168,76,0.45)':'rgba(201,168,76,0.14)'}`,color:p?'#E8C97A':'#A89878',cursor:'pointer',userSelect:'none',position:'relative',overflow:'hidden',transition:'box-shadow .12s, color .12s'}}>
+      {p&&<motion.div initial={{scale:0,opacity:0.6}} animate={{scale:3,opacity:0}} transition={{duration:0.4}} style={{position:'absolute',top:'50%',left:'50%',width:30,height:30,borderRadius:'50%',background:'rgba(201,168,76,0.3)',transform:'translate(-50%,-50%)',pointerEvents:'none'}}/>}
       {digit}
     </motion.button>
   );
 }
 
-// ─────────────────────────────────────────────────────────
-// INTRO SCREEN PRINCIPAL
-// ─────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// INTRO SCREEN
+// ─────────────────────────────────────────────────────────────
 export default function IntroScreen() {
   const { setMode } = useDossier();
   const [phase,     setPhase]     = useState<Phase>('eagle');
@@ -475,124 +558,108 @@ export default function IntroScreen() {
   const audioInit = useRef(false);
   const busy      = useRef(false);
 
-  // Eagle done → transition vers pad
   const handleEagleDone = useCallback(() => {
     setTimeout(() => setPhase('pad'), 500);
   }, []);
 
-  // Fallback si animation trop longue
   useEffect(() => {
-    const t = setTimeout(()=>{ if(phase==='eagle') setPhase('pad'); }, 7000);
+    const t = setTimeout(() => { if (phase==='eagle') setPhase('pad'); }, 10000);
     return () => clearTimeout(t);
   }, [phase]);
 
-  const initAudio = () => { if(!audioInit.current){audio.init();audioInit.current=true;} };
+  const initAudio = () => { if (!audioInit.current) { audio.init(); audioInit.current=true; } };
 
   const addDigit = (d:string) => {
-    if(busy.current||entered.length>=4) return;
+    if (busy.current||entered.length>=4) return;
     initAudio(); audio.key();
     const next=entered+d; setEntered(next);
-    if(next.length===4){ busy.current=true; setTimeout(()=>checkCode(next),380); }
+    if (next.length===4) { busy.current=true; setTimeout(()=>checkCode(next),380); }
   };
   const delDigit = () => {
-    if(busy.current) return;
-    initAudio(); audio.del();
+    if (busy.current) return; initAudio(); audio.del();
     setEntered(e=>e.slice(0,-1)); setStatusMsg('');
   };
   const checkCode = (code:string) => {
-    const isAdmin   = code===CONFIG.codes.admin;
-    const isVisitor = code===CONFIG.codes.visiteur;
-    if(isAdmin||isVisitor) {
+    const isA=code===CONFIG.codes.admin, isV=code===CONFIG.codes.visiteur;
+    if (isA||isV) {
       audio.ok(); setStatus('ok');
-      setStatusMsg(isAdmin?'✓ ACCÈS ADMINISTRATEUR — ÉDITION ACTIVÉE':'✓ ACCÈS VISITEUR — LECTURE SEULE');
-      setTimeout(()=>startHolo(isAdmin?'admin':'visitor'), 1000);
+      setStatusMsg(isA?'✓ ACCÈS ADMINISTRATEUR — ÉDITION ACTIVÉE':'✓ ACCÈS VISITEUR — LECTURE SEULE');
+      setTimeout(()=>startHolo(isA?'admin':'visitor'),1000);
     } else {
       audio.err(); setStatus('err'); setAttempts(a=>a+1);
       setStatusMsg('✗ CODE INCORRECT — ACCÈS REFUSÉ');
-      setTimeout(()=>{ setStatus('idle'); setStatusMsg(''); setEntered(''); busy.current=false; }, 1400);
+      setTimeout(()=>{ setStatus('idle'); setStatusMsg(''); setEntered(''); busy.current=false; },1400);
     }
   };
-  const startHolo = (accessMode:'admin'|'visitor') => {
+  const startHolo = (m:'admin'|'visitor') => {
     setPhase('holo');
-    const ticks=[0,155,295,420,530,625,705,772,828,872,908,934,952,963];
-    ticks.forEach(d=>setTimeout(()=>audio.tick(), d+260));
-    setTimeout(()=>{ holoRef.current?.lock(); audio.lock(); setGStat('Déclassification en cours...'); }, 1620);
-    setTimeout(()=>{ audio.voice(); setShowVBox(true); }, 2700);
-    setTimeout(()=>{ setShowStamp(true); audio.stamp(); }, 4200);
-    setTimeout(()=>{ audio.reveal(); launchConfetti(); setPhase('done'); setMode(accessMode); }, 6500);
+    [0,155,295,420,530,625,705,772,828,872,908,934,952,963].forEach(d=>setTimeout(()=>audio.tick(),d+260));
+    setTimeout(()=>{ holoRef.current?.lock(); audio.lock(); setGStat('Déclassification en cours...'); },1620);
+    setTimeout(()=>{ audio.voice(); setShowVBox(true); },2700);
+    setTimeout(()=>{ setShowStamp(true); audio.stamp(); },4200);
+    setTimeout(()=>{ audio.reveal(); launchConfetti(); setPhase('done'); setMode(m); },6500);
   };
 
-  if(phase==='done') return null;
-
-  const mono:React.CSSProperties = { fontFamily:'"Share Tech Mono",monospace' };
+  if (phase==='done') return null;
+  const mono: React.CSSProperties = { fontFamily:'"Share Tech Mono",monospace' };
 
   return (
     <motion.div exit={{opacity:0,scale:1.04}} transition={{duration:0.9}}
       style={{position:'fixed',inset:0,zIndex:9999,background:'#020810',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',overflow:'hidden'}}>
 
-      {/* ── Globe + Aigle (toujours monté) ── */}
+      {/* Canvas (globe + eagle always visible) */}
       <GlobeEagleCanvas phase={phase} onEagleDone={handleEagleDone}/>
 
-      {/* Grille terminale */}
-      <div style={{position:'absolute',inset:0,pointerEvents:'none',backgroundImage:'linear-gradient(rgba(201,168,76,0.016) 1px,transparent 1px),linear-gradient(90deg,rgba(201,168,76,0.016) 1px,transparent 1px)',backgroundSize:'40px 40px'}}/>
-
-      {/* Ligne de scan */}
+      {/* Scan line */}
       <motion.div animate={{y:['-4px','100vh']}} transition={{duration:9,repeat:Infinity,ease:'linear',repeatDelay:3}}
-        style={{position:'absolute',left:0,right:0,height:2,pointerEvents:'none',background:'linear-gradient(90deg,transparent,rgba(80,200,200,0.09),transparent)',zIndex:2}}/>
+        style={{position:'absolute',left:0,right:0,height:2,pointerEvents:'none',background:'linear-gradient(90deg,transparent,rgba(80,200,200,0.08),transparent)',zIndex:2}}/>
 
-      {/* Coins HUD */}
+      {/* HUD corners */}
       {[{top:12,left:12,borderTop:'1.5px solid rgba(201,168,76,0.38)',borderLeft:'1.5px solid rgba(201,168,76,0.38)'},{top:12,right:12,borderTop:'1.5px solid rgba(201,168,76,0.38)',borderRight:'1.5px solid rgba(201,168,76,0.38)'},{bottom:12,left:12,borderBottom:'1.5px solid rgba(201,168,76,0.38)',borderLeft:'1.5px solid rgba(201,168,76,0.38)'},{bottom:12,right:12,borderBottom:'1.5px solid rgba(201,168,76,0.38)',borderRight:'1.5px solid rgba(201,168,76,0.38)'}].map((s,i)=>(
         <motion.div key={i} initial={{opacity:0,scale:0.4}} animate={{opacity:1,scale:1}} transition={{delay:0.3+i*0.1}}
           style={{position:'absolute',...s,width:44,height:44,zIndex:25,pointerEvents:'none'}}/>
       ))}
 
-      {/* ── EAGLE PHASE — textes ── */}
+      {/* Eagle phase label */}
       {phase==='eagle' && (
-        <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
-          style={{position:'absolute',bottom:'18%',left:'50%',transform:'translateX(-50%)',display:'flex',flexDirection:'column',alignItems:'center',gap:10,pointerEvents:'none',zIndex:10}}>
-          <div style={{...mono,fontSize:9,letterSpacing:6,color:'rgba(201,168,76,0.32)',textTransform:'uppercase',whiteSpace:'nowrap'}}>
+        <motion.div initial={{opacity:0}} animate={{opacity:1}} transition={{delay:1.2}}
+          style={{position:'absolute',bottom:'16%',left:'50%',transform:'translateX(-50%)',display:'flex',flexDirection:'column',alignItems:'center',gap:10,pointerEvents:'none',zIndex:10}}>
+          <div style={{...mono,fontSize:9,letterSpacing:6,color:'rgba(201,168,76,0.28)',textTransform:'uppercase',whiteSpace:'nowrap'}}>
             Département des Finances — Los Santos
           </div>
-          <motion.div animate={{opacity:[0.18,0.65,0.18]}} transition={{duration:1.5,repeat:Infinity}}
-            style={{...mono,fontSize:8,letterSpacing:5,color:'rgba(80,200,200,0.22)',textTransform:'uppercase'}}>
+          <motion.div animate={{opacity:[0.15,0.55,0.15]}} transition={{duration:1.6,repeat:Infinity}}
+            style={{...mono,fontSize:8,letterSpacing:5,color:'rgba(80,200,200,0.20)',textTransform:'uppercase'}}>
             ◈ Initialisation du système sécurisé...
           </motion.div>
         </motion.div>
       )}
 
-      {/* ── PAD PHASE ── */}
+      {/* PAD phase */}
       {phase==='pad' && (
-        <motion.div key="pad" initial={{opacity:0,y:18}} animate={{opacity:1,y:0}} transition={{duration:0.55,ease:[0.22,1,0.36,1]}}
+        <motion.div key="pad" initial={{opacity:0,y:16}} animate={{opacity:1,y:0}} transition={{duration:0.55,ease:[0.22,1,0.36,1]}}
           style={{display:'flex',flexDirection:'column',alignItems:'center',textAlign:'center',position:'relative',zIndex:10}}>
 
-          {/* Tentatives */}
-          {attempts>0 && (
-            <motion.div initial={{opacity:0}} animate={{opacity:1}}
-              style={{position:'absolute',top:-34,right:0,...mono,fontSize:9,letterSpacing:3,color:'rgba(192,57,43,0.62)',textTransform:'uppercase'}}>
-              TENTATIVES : {attempts}
-            </motion.div>
-          )}
+          {attempts>0&&<motion.div initial={{opacity:0}} animate={{opacity:1}} style={{position:'absolute',top:-30,right:0,...mono,fontSize:9,letterSpacing:3,color:'rgba(192,57,43,0.62)',textTransform:'uppercase'}}>TENTATIVES : {attempts}</motion.div>}
 
-          <motion.div initial={{scaleX:0}} animate={{scaleX:1}} transition={{delay:0.1,duration:0.7,ease:[0.22,1,0.36,1]}}
+          <motion.div initial={{scaleX:0}} animate={{scaleX:1}} transition={{delay:0.10,duration:0.7,ease:[0.22,1,0.36,1]}}
             style={{width:320,height:1,background:'linear-gradient(90deg,transparent,rgba(201,168,76,0.55),transparent)',marginBottom:14}}/>
 
-          {/* Badge */}
-          <motion.div initial={{scale:0.5,opacity:0}} animate={{scale:1,opacity:1}} transition={{delay:0.2,type:'spring',stiffness:160}}
+          <motion.div initial={{scale:0.5,opacity:0}} animate={{scale:1,opacity:1}} transition={{delay:0.20,type:'spring',stiffness:160}}
             style={{marginBottom:12,position:'relative'}}>
-            <motion.div animate={{opacity:[0.22,0.58,0.22],scale:[0.92,1.08,0.92]}} transition={{duration:3.8,repeat:Infinity}}
-              style={{position:'absolute',inset:-18,borderRadius:'50%',background:'radial-gradient(circle,rgba(80,200,200,0.09) 0%,transparent 70%)',pointerEvents:'none'}}/>
+            <motion.div animate={{opacity:[0.20,0.55,0.20],scale:[0.92,1.08,0.92]}} transition={{duration:3.8,repeat:Infinity}}
+              style={{position:'absolute',inset:-18,borderRadius:'50%',background:'radial-gradient(circle,rgba(80,200,200,0.08) 0%,transparent 70%)',pointerEvents:'none'}}/>
             <div style={{width:70,height:70,borderRadius:'50%',border:'2px solid rgba(201,168,76,0.65)',background:'radial-gradient(circle,#1A2438 60%,#020810)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:34,boxShadow:'0 0 28px rgba(201,168,76,0.12)'}}>🦅</div>
           </motion.div>
 
-          <motion.div initial={{opacity:0,y:5}} animate={{opacity:1,y:0}} transition={{delay:0.30}}
+          <motion.div initial={{opacity:0,y:5}} animate={{opacity:1,y:0}} transition={{delay:0.28}}
             style={{fontFamily:'Cinzel,serif',fontSize:7.5,letterSpacing:6,color:'#7A5910',textTransform:'uppercase',marginBottom:3}}>
             Département des Finances — Los Santos
           </motion.div>
-          <motion.div initial={{opacity:0,y:5}} animate={{opacity:1,y:0}} transition={{delay:0.38}}
+          <motion.div initial={{opacity:0,y:5}} animate={{opacity:1,y:0}} transition={{delay:0.36}}
             style={{fontFamily:'Cinzel,serif',fontSize:19,fontWeight:700,color:'#C9A84C',textTransform:'uppercase',letterSpacing:3,marginBottom:4}}>
             Dossier Confidentiel
           </motion.div>
-          <motion.div initial={{opacity:0}} animate={{opacity:1}} transition={{delay:0.46}}
+          <motion.div initial={{opacity:0}} animate={{opacity:1}} transition={{delay:0.44}}
             style={{...mono,fontSize:7.5,letterSpacing:3,color:'rgba(201,168,76,0.20)',textTransform:'uppercase',marginBottom:18}}>
             Code Visiteur — Lecture &nbsp;/&nbsp; Code Admin — Édition
           </motion.div>
@@ -605,24 +672,20 @@ export default function IntroScreen() {
             ◈ &nbsp; Entrez le code d'accès &nbsp; ◈
           </motion.div>
 
-          {/* Code boxes */}
           <motion.div initial={{opacity:0,scale:0.92}} animate={{opacity:1,scale:1}} transition={{delay:0.60,type:'spring'}}
             style={{display:'flex',gap:10,marginBottom:16}}>
             {[0,1,2,3].map(i=><CodeBox key={i} index={i} entered={entered} status={status}/>)}
           </motion.div>
 
-          {/* Status */}
           <AnimatePresence mode="wait">
             {statusMsg
               ? <motion.div key="msg" initial={{opacity:0,y:-4}} animate={{opacity:1,y:0}} exit={{opacity:0}} transition={{duration:0.18}}
                   style={{...mono,fontSize:8,letterSpacing:2,textTransform:'uppercase',height:17,marginBottom:12,color:status==='ok'?'rgba(180,160,80,0.92)':'rgba(192,57,43,0.88)'}}>
                   {statusMsg}
                 </motion.div>
-              : <div style={{height:17,marginBottom:12}}/>
-            }
+              : <div style={{height:17,marginBottom:12}}/>}
           </AnimatePresence>
 
-          {/* Numpad */}
           <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{delay:0.65}}
             style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:6,width:182,marginBottom:12,position:'relative',zIndex:10}}>
             {['1','2','3','4','5','6','7','8','9'].map(d=><NumKey key={d} digit={d} onClick={()=>addDigit(d)}/>)}
@@ -641,7 +704,7 @@ export default function IntroScreen() {
         </motion.div>
       )}
 
-      {/* ── HOLO PHASE ── */}
+      {/* HOLO phase */}
       {phase==='holo' && (
         <motion.div key="holo" initial={{opacity:0}} animate={{opacity:1}} transition={{duration:0.4}}
           style={{display:'flex',flexDirection:'column',alignItems:'center',gap:14,position:'relative',zIndex:10}}>
