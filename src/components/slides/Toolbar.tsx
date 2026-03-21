@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 interface Props { totalSlides: number; onAddPage:()=>void; onRemovePage:()=>void; onExport:()=>void; onShare:()=>void; }
 
 export default function Toolbar({ totalSlides, onAddPage, onRemovePage, onExport, onShare }: Props) {
-  const { currentSlide, setSlide, mode, toggleMute, isMuted, toggleStats, toggleWatermark } = useDossier();
+  const { currentSlide, setSlide, mode, isMuted, toggleStats, toggleWatermark, volumeLevel, setVolumeLevel } = useDossier();
   const [clock, setClock] = useState('');
   const [timer, setTimer] = useState('00:00');
   const [timerStart] = useState(Date.now());
@@ -115,7 +115,21 @@ export default function Toolbar({ totalSlides, onAddPage, onRemovePage, onExport
         </span>
 
         <div style={{ width:1, height:20, background:'rgba(201,168,76,0.1)' }}/>
-        <button onClick={toggleMute} style={{ ...arrBtn, fontSize:13 }}>{isMuted?'🔇':'🔊'}</button>
+        {/* Volume slider */}
+        <div style={{ display:'flex', alignItems:'center', gap:7 }}>
+          <span style={{ fontFamily:'Share Tech Mono,monospace', fontSize:11, color:'rgba(201,168,76,0.5)', userSelect:'none' }}>
+            {volumeLevel === 0 ? '🔇' : volumeLevel < 40 ? '🔉' : '🔊'}
+          </span>
+          <input
+            type="range" min={0} max={100} value={volumeLevel}
+            onChange={e => setVolumeLevel(Number(e.target.value))}
+            style={{ width:72, accentColor:'#C9A84C', height:3, cursor:'pointer' }}
+          />
+          <span style={{ fontFamily:'Share Tech Mono,monospace', fontSize:10,
+            color:'rgba(201,168,76,0.45)', minWidth:26, textAlign:'right' }}>
+            {volumeLevel}%
+          </span>
+        </div>
 
         {isAdmin && <button onClick={onAddPage}    style={btn('rgba(80,200,120,0.35)','rgba(80,200,120,0.85)')}>+ Page</button>}
         {isAdmin && <button onClick={onRemovePage} style={btn('rgba(192,57,43,0.35)','rgba(192,57,43,0.75)')}>− Page</button>}
