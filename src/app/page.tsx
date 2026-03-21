@@ -15,6 +15,14 @@ const CustomCursor = dynamic(() => import('@/components/ui/CustomCursor'), { ssr
 
 export default function Home() {
   const { mode, currentSlide, content, extraPages, addPage, removePage, setContent, setMode } = useDossier();
+
+  // Force clear any persisted extra pages on mount (page 8 ghost fix)
+  useEffect(() => {
+    const store = useDossier.getState();
+    if (store.extraPages.length > 0) {
+      store.extraPages.forEach(p => store.removePage(p.id));
+    }
+  }, []);
   const totalSlides = CONFIG.slides.length + extraPages.length;
 
   // Load from KV on first unlock — merge with any local content
