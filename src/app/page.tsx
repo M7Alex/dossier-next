@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useDossier } from '@/store';
 import { CONFIG } from '@/lib/config';
 import { toast } from 'sonner';
@@ -17,12 +17,16 @@ export default function Home() {
   const { mode, currentSlide, content, extraPages, addPage, removePage, setContent, setMode } = useDossier();
   const totalSlides = CONFIG.slides.length + extraPages.length;
 
-  // Load from KV when admin
+  // Load from KV on first unlock — merge with any local content
+  const kvLoaded = useRef(false);
   useEffect(() => {
-    if (mode === 'locked') return;
+    if (mode === 'locked' || kvLoaded.current) return;
+    kvLoaded.current = true;
     fetch('/api/save').then(r => r.json()).then(data => {
-      if (data.content && Object.keys(data.content).length > 0)
+      if (data.content && Object.keys(data.content).length > 0) {
+        // KV content takes priority (it's the admin's last saved version)
         Object.entries(data.content).forEach(([k, v]) => setContent(k, v as string));
+      }
     }).catch(() => {});
   }, [mode]);
 
