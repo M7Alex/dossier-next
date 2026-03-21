@@ -5,6 +5,7 @@ import { useDossier } from '@/store';
 import { CONFIG } from '@/lib/config';
 import CoverSlide from './CoverSlide';
 import ChapterSlide from './ChapterSlide';
+import LegacySlide from './LegacySlide';
 import ParticlesBg from '../ui/ParticlesBg';
 import Chibi from '../chibi/Chibi';
 import { audio } from '@/lib/audio';
@@ -24,6 +25,7 @@ const SLIDE_BG: Record<string, string> = {
   systemes:   'linear-gradient(135deg,#1a1520,#231a2e,#130f18)',
   leadership: 'linear-gradient(135deg,#1a1815,#2a2218,#13110e)',
   conclusion: 'linear-gradient(135deg,#151a1a,#1a2520,#0e1815)',
+  legacy:     'linear-gradient(160deg,#000 0%,#0a0a0a 100%)',
 };
 
 const BG_TYPE: Record<string, string> = {
@@ -241,6 +243,7 @@ export default function SlideEngine() {
               style={{ position:'absolute', inset:0 }}>
               {slide?.type === 'cover' && <CoverSlide isActive={true}/>}
               {(slide?.type === 'chapter' || slide?.type === 'custom') && <ChapterSlide slide={slide} isActive={true}/>}
+              {slide?.type === 'legacy' && <LegacySlide isActive={true}/>}
             </motion.div>
           </AnimatePresence>
         </div>
