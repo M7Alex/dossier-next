@@ -118,6 +118,19 @@ export default function SlideEngine() {
     return () => window.removeEventListener('keydown', h);
   }, [currentSlide, go, content, extraPages]);
 
+  // ── Auto-save to KV — debounced 1.2s after any content change ──
+  useEffect(() => {
+    if (typeof window === 'undefined' || window.location.protocol === 'file:') return;
+    const t = setTimeout(() => {
+      fetch('/api/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content, extraPages }),
+      }).catch(() => {});
+    }, 1200);
+    return () => clearTimeout(t);
+  }, [content, extraPages]);
+
   useEffect(() => {
     let sx = 0, sy = 0;
     const ts = (e: TouchEvent) => { sx = e.touches[0].clientX; sy = e.touches[0].clientY; };
