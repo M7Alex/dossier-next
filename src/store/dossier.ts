@@ -16,6 +16,8 @@ interface DossierState {
   removePage: (id: string) => void;
   isMuted: boolean;
   toggleMute: () => void;
+  volumeLevel: number;
+  setVolumeLevel: (v: number) => void;
   showChat: boolean;
   toggleChat: () => void;
   showStats: boolean;
@@ -39,6 +41,8 @@ export const useDossier = create<DossierState>()(
       removePage: (id) => set((s) => ({ extraPages: s.extraPages.filter((p) => p.id !== id) })),
       isMuted: false,
       toggleMute: () => set((s) => ({ isMuted: !s.isMuted })),
+      volumeLevel: 70,
+      setVolumeLevel: (v) => set({ volumeLevel: v }),
       showChat: false,
       toggleChat: () => set((s) => ({ showChat: !s.showChat })),
       showStats: false,
@@ -47,8 +51,8 @@ export const useDossier = create<DossierState>()(
       toggleWatermark: () => set((s) => ({ showWatermark: !s.showWatermark })),
     }),
     {
-      name: 'dossier-rp-v6',
-      partialize: (s) => ({ content: s.content, extraPages: s.extraPages }),
+      name: 'dossier-rp-v7',
+      partialize: (s) => ({ content: s.content, extraPages: s.extraPages, volumeLevel: s.volumeLevel }),
     }
   )
 );
