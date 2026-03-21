@@ -99,13 +99,8 @@ export default function SlideEngine() {
     if (i < 0 || i >= total || i === currentSlide) return;
     setDir(i > currentSlide ? 1 : -1);
     const slideDir = i > currentSlide ? 'right' : 'left'; audio.slide(slideDir);
-    // Ambiance : active sur slides 0-6 (slide 7 = Legacy a sa propre musique)
-    const goingToLegacy = allSlides[i]?.type === 'legacy';
-    const comingFromLegacy = allSlides[currentSlide]?.type === 'legacy';
-    if (goingToLegacy) { audio.stopAmbience(); }
-    else if (comingFromLegacy) { setTimeout(() => audio.startAmbience(), 400); }
     setSlide(i);
-  }, [currentSlide, total, setSlide, allSlides]);
+  }, [currentSlide, total, setSlide]);
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
@@ -155,16 +150,6 @@ export default function SlideEngine() {
     , 800);
     return () => clearTimeout(t);
   }, [content, extraPages]);
-
-  // Démarrage ambiance au chargement (si pas sur Legacy)
-  useEffect(() => {
-    const cur = allSlides[currentSlide];
-    if ((cur as any)?.type !== 'legacy') {
-      const t = setTimeout(() => audio.startAmbience(), 800);
-      return () => clearTimeout(t);
-    }
-  }, []); // eslint-disable-line
-  useEffect(() => () => { audio.stopAmbience(1.5); }, []);
 
   const slide = allSlides[currentSlide];
   const slideId = (slide as any)?.id || 'cover';
