@@ -5,9 +5,10 @@ import { useDossier } from '@/store';
 import { CONFIG } from '@/lib/config';
 import { audio } from '@/lib/audio';
 import HoloCanvas from './HoloCanvas';
+import FingerprintScan from './FingerprintScan';
 import type { HoloRef } from './HoloCanvas';
 
-type Phase = 'eagle' | 'pad' | 'holo' | 'done';
+type Phase = 'fingerprint' | 'eagle' | 'pad' | 'holo' | 'done';
 
 function launchConfetti() {
   const colors = ['#C9A84C','#E8C97A','#8B6914','rgba(80,200,200,0.9)'];
@@ -456,7 +457,7 @@ function NumKey({digit,onClick}:{digit:string;onClick:()=>void}) {
 // ═══════════════════════════════════════════════════════
 export default function IntroScreen() {
   const { setMode } = useDossier();
-  const [phase,setPhase]=useState<Phase>('eagle');
+  const [phase,setPhase]=useState<Phase>('fingerprint');
   const [entered,setEntered]=useState('');
   const [status,setStatus]=useState<'idle'|'ok'|'err'>('idle');
   const [statusMsg,setStatusMsg]=useState('');
@@ -511,7 +512,9 @@ export default function IntroScreen() {
     return ()=>clearTimeout(t);
   },[]);
 
+  const handleFingerprintDone=useCallback(()=>{ setPhase('eagle'); },[]);
   const handleEagleDone=useCallback(()=>{ setTimeout(()=>setPhase('pad'),400); },[]);
+  useEffect(()=>{ const t=setTimeout(()=>{ if(phase==='fingerprint') setPhase('eagle'); },4500); return ()=>clearTimeout(t); },[phase]);
   useEffect(()=>{ const t=setTimeout(()=>{ if(phase==='eagle') setPhase('pad'); },8500); return ()=>clearTimeout(t); },[phase]);
 
   const initAudio=()=>{ if(!audioInit.current){audio.init();audioInit.current=true;} };
@@ -519,7 +522,7 @@ export default function IntroScreen() {
   const delDigit=()=>{ if(busy.current) return; initAudio(); audio.del(); setEntered(e=>e.slice(0,-1)); setStatusMsg(''); };
   const checkCode=(code:string)=>{
     const isA=code===CONFIG.codes.admin,isV=code===CONFIG.codes.visiteur;
-    if(isA||isV){ initAudio(); audio.ok(); setStatus('ok'); setStatus('ok'); setStatusMsg(isA?'✓ ACCÈS ADMINISTRATEUR — ÉDITION ACTIVÉE':'✓ ACCÈS VISITEUR — LECTURE SEULE'); setTimeout(()=>startHolo(isA?'admin':'visitor'),1000); }
+    if(isA||isV){ initAudio(); audio.ok(); setStatus('ok'); setStatusMsg(isA?'✓ ACCÈS ADMINISTRATEUR — ÉDITION ACTIVÉE':'✓ ACCÈS VISITEUR — LECTURE SEULE'); setTimeout(()=>startHolo(isA?'admin':'visitor'),1000); }
     else { audio.err(); setStatus('err'); setAttempts(a=>a+1); setStatusMsg('✗ CODE INCORRECT — ACCÈS REFUSÉ'); setTimeout(()=>{ setStatus('idle'); setStatusMsg(''); setEntered(''); busy.current=false; },1400); }
   };
   const startHolo=(m:'admin'|'visitor')=>{
@@ -539,7 +542,7 @@ export default function IntroScreen() {
     <motion.div exit={{opacity:0,scale:1.04}} transition={{duration:.9}}
       style={{position:'fixed',inset:0,zIndex:9999,background:'#020810',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',overflow:'hidden'}}>
 
-      <GlobeEagleCanvas phase={phase} onEagleDone={handleEagleDone}/>
+      {phase!=='fingerprint'&&<GlobeEagleCanvas phase={phase} onEagleDone={handleEagleDone}/>}
 
       {/* Scan line */}
       <motion.div animate={{y:['-4px','100vh']}} transition={{duration:9,repeat:Infinity,ease:'linear',repeatDelay:3}}
@@ -550,6 +553,14 @@ export default function IntroScreen() {
         <motion.div key={i} initial={{opacity:0,scale:.4}} animate={{opacity:1,scale:1}} transition={{delay:.2+i*.08}}
           style={{position:'absolute',...s,width:44,height:44,zIndex:25,pointerEvents:'none'}}/>
       ))}
+
+      {/* ── FINGERPRINT PHASE ── */}
+      {phase==='fingerprint'&&(
+        <motion.div key="fp" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} transition={{duration:.4}}
+          style={{position:'absolute',inset:0,zIndex:10,pointerEvents:'none'}}>
+          <FingerprintScan onComplete={handleFingerprintDone}/>
+        </motion.div>
+      )}
 
       {phase==='eagle'&&(
         <motion.div initial={{opacity:0}} animate={{opacity:1}} transition={{delay:.9}}
