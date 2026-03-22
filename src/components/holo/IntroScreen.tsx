@@ -470,47 +470,58 @@ export default function IntroScreen() {
   const busy=useRef(false);
   const holoSoundPlayed=useRef(false);
 
-  // ── Son holographique de démarrage (Web Audio, unique) ──
-  useEffect(()=>{
-    if(holoSoundPlayed.current) return;
-    holoSoundPlayed.current=true;
-    // Délai léger pour laisser le navigateur se préparer
-    const t=setTimeout(()=>{
-      try {
-        const ctx2=new (window.AudioContext||(window as any).webkitAudioContext)();
-        const master=ctx2.createGain(); master.gain.value=0.28; master.connect(ctx2.destination);
-        // Réverb plate
-        const rev=ctx2.createConvolver();
-        const rl=Math.floor(ctx2.sampleRate*2.2), rb=ctx2.createBuffer(2,rl,ctx2.sampleRate);
-        for(let ch=0;ch<2;ch++){const d=rb.getChannelData(ch);for(let i=0;i<rl;i++) d[i]=(Math.random()*2-1)*Math.exp(-5*i/rl);}
-        rev.buffer=rb; const rg=ctx2.createGain(); rg.gain.value=0.55; rev.connect(rg); rg.connect(master);
-        // Layer 1: fond drone montant
-        const drone=ctx2.createOscillator(); drone.type='sine'; drone.frequency.setValueAtTime(55,0); drone.frequency.exponentialRampToValueAtTime(110,2.0);
-        const dg=ctx2.createGain(); dg.gain.setValueAtTime(0,0); dg.gain.linearRampToValueAtTime(0.22,0.35); dg.gain.linearRampToValueAtTime(0.10,2.8); dg.gain.linearRampToValueAtTime(0,3.5);
-        drone.connect(dg); dg.connect(master); dg.connect(rev); drone.start(); drone.stop(3.6);
-        // Layer 2: sweep synthétique
-        const sweep=ctx2.createOscillator(); sweep.type='triangle'; sweep.frequency.setValueAtTime(320,0); sweep.frequency.exponentialRampToValueAtTime(1800,1.2); sweep.frequency.exponentialRampToValueAtTime(880,2.5);
-        const sg=ctx2.createGain(); sg.gain.setValueAtTime(0,0); sg.gain.linearRampToValueAtTime(0.08,0.12); sg.gain.linearRampToValueAtTime(0.04,1.8); sg.gain.linearRampToValueAtTime(0,3.0);
-        const lp=ctx2.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=3200; lp.Q.value=1.2;
-        sweep.connect(lp); lp.connect(sg); sg.connect(master); sg.connect(rev); sweep.start(); sweep.stop(3.1);
-        // Layer 3: shimmer haute fréquence
-        [660,880,1320].forEach((f,i)=>{
-          const o=ctx2.createOscillator(); o.type='sine'; o.frequency.value=f;
-          const g2=ctx2.createGain(); g2.gain.setValueAtTime(0,0); g2.gain.linearRampToValueAtTime(0.030,0.5+i*.25); g2.gain.linearRampToValueAtTime(0.015,2.0+i*.15); g2.gain.linearRampToValueAtTime(0,3.2);
-          o.connect(g2); g2.connect(master); g2.connect(rev); o.start(); o.stop(3.3);
-        });
-        // Layer 4: bruit de texture numérique
-        const noiseLen=Math.floor(ctx2.sampleRate*.8);
-        const nb=ctx2.createBuffer(1,noiseLen,ctx2.sampleRate); const nd=nb.getChannelData(0);
-        for(let i=0;i<noiseLen;i++) nd[i]=(Math.random()*2-1);
-        const ns=ctx2.createBufferSource(); ns.buffer=nb;
-        const nbp=ctx2.createBiquadFilter(); nbp.type='bandpass'; nbp.frequency.value=2400; nbp.Q.value=8;
-        const ng=ctx2.createGain(); ng.gain.setValueAtTime(0,0); ng.gain.linearRampToValueAtTime(0.06,.05); ng.gain.exponentialRampToValueAtTime(0.001,.8);
-        ns.connect(nbp); nbp.connect(ng); ng.connect(master); ns.start(); ns.stop(.9);
-      } catch(e){ /* ignore */ }
-    },200);
-    return ()=>clearTimeout(t);
-  },[]);
+  // ── Son holographique — robuste contre le blocage autoplay ──
+  const holoCtxRef = useRef<AudioContext | null>(null);
+
+  const playHoloSound = useCallback(() => {
+    if (holoSoundPlayed.current) return;
+    holoSoundPlayed.current = true;
+    try {
+      const ctx2 = new (window.AudioContext || (window as any).webkitAudioContext)();
+      holoCtxRef.current = ctx2;
+      const doPlay = () => {
+        const master = ctx2.createGain(); master.gain.value = 0.32; master.connect(ctx2.destination);
+        const rl = Math.floor(ctx2.sampleRate * 2.0);
+        const rb = ctx2.createBuffer(2, rl, ctx2.sampleRate);
+        for (let ch = 0; ch < 2; ch++) { const d = rb.getChannelData(ch); for (let i = 0; i < rl; i++) d[i] = (Math.random()*2-1)*Math.exp(-5*i/rl); }
+        const rev = ctx2.createConvolver(); rev.buffer = rb;
+        const rg = ctx2.createGain(); rg.gain.value = 0.60; rev.connect(rg); rg.connect(master);
+        const now = ctx2.currentTime;
+        // Drone
+        const drone = ctx2.createOscillator(); drone.type = 'sine';
+        drone.frequency.setValueAtTime(48, now); drone.frequency.exponentialRampToValueAtTime(115, now+2.2);
+        const dg = ctx2.createGain(); dg.gain.setValueAtTime(0,now); dg.gain.linearRampToValueAtTime(0.26,now+0.4); dg.gain.linearRampToValueAtTime(0.12,now+2.8); dg.gain.linearRampToValueAtTime(0,now+3.6);
+        drone.connect(dg); dg.connect(master); dg.connect(rev); drone.start(now); drone.stop(now+3.7);
+        // Sweep
+        const sweep = ctx2.createOscillator(); sweep.type = 'triangle';
+        sweep.frequency.setValueAtTime(280,now); sweep.frequency.exponentialRampToValueAtTime(1900,now+1.4); sweep.frequency.exponentialRampToValueAtTime(820,now+2.6);
+        const lp = ctx2.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=3000; lp.Q.value=1.0;
+        const sg = ctx2.createGain(); sg.gain.setValueAtTime(0,now); sg.gain.linearRampToValueAtTime(0.095,now+0.14); sg.gain.linearRampToValueAtTime(0.045,now+1.9); sg.gain.linearRampToValueAtTime(0,now+3.1);
+        sweep.connect(lp); lp.connect(sg); sg.connect(master); sg.connect(rev); sweep.start(now); sweep.stop(now+3.2);
+        // Shimmer
+        [660,880,1320,1760].forEach((f,i)=>{ const o=ctx2.createOscillator(); o.type='sine'; o.frequency.value=f; const g2=ctx2.createGain(); g2.gain.setValueAtTime(0,now); g2.gain.linearRampToValueAtTime(0.038-i*0.007,now+0.6+i*0.22); g2.gain.linearRampToValueAtTime(0.018-i*0.003,now+2.2+i*0.12); g2.gain.linearRampToValueAtTime(0,now+3.3); o.connect(g2); g2.connect(master); g2.connect(rev); o.start(now); o.stop(now+3.4); });
+        // Noise burst
+        const noiseLen=Math.floor(ctx2.sampleRate*0.7); const nb=ctx2.createBuffer(1,noiseLen,ctx2.sampleRate); const nd=nb.getChannelData(0); for(let i=0;i<noiseLen;i++) nd[i]=Math.random()*2-1;
+        const ns=ctx2.createBufferSource(); ns.buffer=nb; const nbp=ctx2.createBiquadFilter(); nbp.type='bandpass'; nbp.frequency.value=2600; nbp.Q.value=9;
+        const ng=ctx2.createGain(); ng.gain.setValueAtTime(0,now); ng.gain.linearRampToValueAtTime(0.07,now+0.05); ng.gain.exponentialRampToValueAtTime(0.001,now+0.75);
+        ns.connect(nbp); nbp.connect(ng); ng.connect(master); ns.start(now); ns.stop(now+0.8);
+      };
+      if (ctx2.state === 'suspended') { ctx2.resume().then(doPlay).catch(()=>{}); } else { doPlay(); }
+    } catch(e) { /* ignore */ }
+  }, []);
+
+  // Tentative immédiate
+  useEffect(() => { const t = setTimeout(playHoloSound, 150); return () => clearTimeout(t); }, [playHoloSound]);
+
+  // Fallback : premier geste utilisateur débloque si autoplay bloqué
+  useEffect(() => {
+    const unlock = () => {
+      if (holoCtxRef.current?.state === 'suspended') holoCtxRef.current.resume().catch(()=>{});
+      if (!holoSoundPlayed.current) playHoloSound();
+    };
+    window.addEventListener('pointerdown', unlock, { once: true });
+    return () => window.removeEventListener('pointerdown', unlock);
+  }, [playHoloSound]);
 
   const handleFingerprintDone=useCallback(()=>{ setPhase('eagle'); },[]);
   const handleEagleDone=useCallback(()=>{ setTimeout(()=>setPhase('pad'),400); },[]);
