@@ -523,6 +523,7 @@ export default function IntroScreen() {
     else { audio.err(); setStatus('err'); setAttempts(a=>a+1); setStatusMsg('✗ CODE INCORRECT — ACCÈS REFUSÉ'); setTimeout(()=>{ setStatus('idle'); setStatusMsg(''); setEntered(''); busy.current=false; },1400); }
   };
   const startHolo=(m:'admin'|'visitor')=>{
+    initAudio();
     setPhase('holo');
     [0,155,295,420,530,625,705,772,828,872,908,934,952,963].forEach(d=>setTimeout(()=>audio.tick(),d+260));
     setTimeout(()=>{ holoRef.current?.lock(); audio.lock(); setGStat('Déclassification en cours...'); },1620);
