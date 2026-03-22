@@ -519,7 +519,7 @@ export default function IntroScreen() {
   const delDigit=()=>{ if(busy.current) return; initAudio(); audio.del(); setEntered(e=>e.slice(0,-1)); setStatusMsg(''); };
   const checkCode=(code:string)=>{
     const isA=code===CONFIG.codes.admin,isV=code===CONFIG.codes.visiteur;
-    if(isA||isV){ audio.ok(); setStatus('ok'); setStatusMsg(isA?'✓ ACCÈS ADMINISTRATEUR — ÉDITION ACTIVÉE':'✓ ACCÈS VISITEUR — LECTURE SEULE'); setTimeout(()=>startHolo(isA?'admin':'visitor'),1000); }
+    if(isA||isV){ initAudio(); audio.ok(); setStatus('ok'); setStatus('ok'); setStatusMsg(isA?'✓ ACCÈS ADMINISTRATEUR — ÉDITION ACTIVÉE':'✓ ACCÈS VISITEUR — LECTURE SEULE'); setTimeout(()=>startHolo(isA?'admin':'visitor'),1000); }
     else { audio.err(); setStatus('err'); setAttempts(a=>a+1); setStatusMsg('✗ CODE INCORRECT — ACCÈS REFUSÉ'); setTimeout(()=>{ setStatus('idle'); setStatusMsg(''); setEntered(''); busy.current=false; },1400); }
   };
   const startHolo=(m:'admin'|'visitor')=>{
