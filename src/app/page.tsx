@@ -14,33 +14,40 @@ import Toast from '@/components/ui/Toast';
 const CustomCursor = dynamic(() => import('@/components/ui/CustomCursor'), { ssr: false });
 
 export default function Home() {
-  const { mode, currentSlide, content, extraPages, addPage, removePage, setContent } = useDossier();
+  const {
+    mode,
+    currentSlide,
+    content,
+    extraPages,
+    addPage,
+    removePage,
+    setContent,
+  } = useDossier();
 
-  // Force clear any persisted extra pages on mount (page 8 ghost fix)
+  const totalSlides = CONFIG.slides.length + extraPages.length;
+  const initialLoadDone = useRef(false);
+
+  // Nettoyage des pages dynamiques fantômes au démarrage
   useEffect(() => {
     const store = useDossier.getState();
     if (store.extraPages.length > 0) {
-      store.extraPages.forEach(p => store.removePage(p.id));
+      store.extraPages.forEach((p) => store.removePage(p.id));
     }
   }, []);
 
-  const totalSlides = CONFIG.slides.length + extraPages.length;
-
-  // Preload legacy audio silently in background to avoid lag on slide 8
+  // Préload audio
   useEffect(() => {
     const link = document.createElement('link');
     link.rel = 'preload';
     link.as = 'audio';
-    link.href = '/legacy_theme .mp3';
+    link.href = '/legacy_theme.mp3';
     document.head.appendChild(link);
   }, []);
 
   // Chargement intelligent des données :
-  // priorité = #share > KV serveur > localStorage
-  const initialLoadDone = useRef(false);
-
+  // priorité = #share > serveur > localStorage
   useEffect(() => {
-    if (mode === 'locked' || initialLoadDone.current) return;
+    if (initialLoadDone.current) return;
     initialLoadDone.current = true;
 
     const loadData = async () => {
@@ -55,52 +62,63 @@ export default function Home() {
           const dec = LZString.decompressFromEncodedURIComponent(hash.slice(7));
           if (dec) {
             loadedData = JSON.parse(dec);
-
-            // Copie locale de secours
             localStorage.setItem('rp_data', JSON.stringify(loadedData));
+            console.log('📦 Chargé depuis lien partagé');
           }
-        } catch {}
+        } catch (e) {
+          console.error('Erreur chargement share', e);
+        }
       }
 
-      // 2. Sinon on charge depuis le serveur
+      // 2. Sinon depuis le serveur
       if (!loadedData) {
         try {
-          const res = await fetch('/api/save', { cache: 'no-store' });
+          const res = await fetch(`/api/save?t=${Date.now()}`, {
+            method: 'GET',
+            cache: 'no-store',
+          });
+
           const data = await res.json();
+          console.log('🌍 Données serveur reçues :', data);
 
           if (data?.content && Object.keys(data.content).length > 0) {
             loadedData = data.content;
-
-            // Sync locale de secours
             localStorage.setItem('rp_data', JSON.stringify(loadedData));
+            console.log('📦 Chargé depuis serveur');
           }
-        } catch {}
+        } catch (e) {
+          console.error('Erreur chargement serveur', e);
+        }
       }
 
-      // 3. Si serveur vide / erreur → fallback localStorage
+      // 3. Sinon fallback localStorage
       if (!loadedData) {
         const saved = localStorage.getItem('rp_data');
         if (saved) {
           try {
             loadedData = JSON.parse(saved);
-          } catch {}
+            console.log('📦 Chargé depuis localStorage');
+          } catch (e) {
+            console.error('Erreur localStorage', e);
+          }
         }
       }
 
-      // 4. Appliquer
-      if (loadedData && typeof loadedData === 'object') {
+      // 4. Appliquer les données
+      if (loadedData) {
         Object.entries(loadedData).forEach(([k, v]) => {
-          setContent(k, typeof v === 'string' ? v : JSON.stringify(v));
+          setContent(k, v as string);
         });
       }
     };
 
     loadData();
-  }, [mode, setContent]);
+  }, [setContent]);
 
   // Stats tracking
   useEffect(() => {
     if (mode === 'locked' || typeof window === 'undefined' || window.location.protocol === 'file:') return;
+
     const sid = Math.random().toString(36).slice(2) + Date.now().toString(36);
 
     fetch('/api/stats', {
@@ -175,13 +193,9 @@ export default function Home() {
       const comp = LZString.compressToEncodedURIComponent(JSON.stringify(content));
       const url = `${window.location.origin}${window.location.pathname}#share=${comp}`;
 
-      if (navigator.clipboard?.writeText) {
-        navigator.clipboard.writeText(url).then(() => {
-          toast.success('🔗 Lien copié !');
-        });
-      } else {
-        window.prompt('Lien :', url);
-      }
+      navigator.clipboard?.writeText(url).then(() => {
+        toast.success('🔗 Lien copié !');
+      }) ?? window.prompt('Lien :', url);
     } catch {
       toast.error('Erreur de partage');
     }
@@ -195,7 +209,9 @@ export default function Home() {
     <>
       <CustomCursor />
       <Toast />
+
       {mode === 'locked' && <IntroScreen />}
+
       {mode !== 'locked' && (
         <div
           style={{
@@ -218,6 +234,7 @@ export default function Home() {
           </div>
         </div>
       )}
+
       <StatsPanel />
     </>
   );

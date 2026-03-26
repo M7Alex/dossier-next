@@ -67,7 +67,7 @@ function CoverDeco() {
         viewBox="0 0 100 100"
         preserveAspectRatio="none"
       >
-        {[0, 1, 2, 3, 4, 5, 6, 7].map(i => (
+        {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
           <rect
             key={i}
             x={88 + i * 1.1}
@@ -139,15 +139,25 @@ export default function SlideEngine() {
       if (e.key === 'ArrowRight' || e.key === 'ArrowDown') go(currentSlide + 1);
       if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') go(currentSlide - 1);
 
+      // Save manuel CTRL+S
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
+
         fetch('/api/save', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ content, extraPages }),
         })
-          .then(() => toast.success('✦ Sauvegardé'))
-          .catch(() => toast.error('Erreur'));
+          .then(async (r) => {
+            const data = await r.json().catch(() => null);
+
+            if (data?.ok) {
+              toast.success('✦ Sauvegardé sur le serveur');
+            } else {
+              toast.error('⚠️ Sauvegarde locale uniquement (KV non configuré)');
+            }
+          })
+          .catch(() => toast.error('Erreur de sauvegarde'));
       }
     };
 
@@ -155,7 +165,7 @@ export default function SlideEngine() {
     return () => window.removeEventListener('keydown', h);
   }, [currentSlide, go, content, extraPages]);
 
-  // Auto-save unique (corrigé)
+  // Auto-save unique
   useEffect(() => {
     if (typeof window === 'undefined' || window.location.protocol === 'file:') return;
 
@@ -171,8 +181,8 @@ export default function SlideEngine() {
   }, [content, extraPages]);
 
   useEffect(() => {
-    let sx = 0,
-      sy = 0;
+    let sx = 0;
+    let sy = 0;
 
     const ts = (e: TouchEvent) => {
       sx = e.touches[0].clientX;

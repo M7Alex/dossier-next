@@ -6,6 +6,14 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
+const NO_CACHE = {
+  ...CORS,
+  'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+  Pragma: 'no-cache',
+  Expires: '0',
+  'Surrogate-Control': 'no-store',
+};
+
 // Compatible Upstash Redis REST API + ancien @vercel/kv
 function getKVConfig() {
   return {
@@ -47,10 +55,7 @@ async function kvGet(key: string) {
 }
 
 export async function OPTIONS() {
-  return new NextResponse(null, {
-    status: 204,
-    headers: CORS,
-  });
+  return new NextResponse(null, { status: 204, headers: NO_CACHE });
 }
 
 export async function POST(req: NextRequest) {
@@ -65,27 +70,13 @@ export async function POST(req: NextRequest) {
     await kvSet('dossier_content', payload);
 
     return NextResponse.json(
-      { ok: true },
-      {
-        headers: {
-          ...CORS,
-          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0',
-        },
-      }
+      { ok: true, savedAt: new Date().toISOString() },
+      { headers: NO_CACHE }
     );
   } catch (e) {
     return NextResponse.json(
-      { ok: false, reason: 'KV not configured' },
-      {
-        headers: {
-          ...CORS,
-          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0',
-        },
-      }
+      { ok: false, reason: 'KV not configured or save failed' },
+      { headers: NO_CACHE }
     );
   }
 }
@@ -94,29 +85,18 @@ export async function GET() {
   try {
     const raw = await kvGet('dossier_content');
 
-    const responseData = raw
-      ? JSON.parse(raw)
-      : { content: {}, extraPages: [] };
+    if (!raw) {
+      return NextResponse.json(
+        { content: {}, extraPages: [], savedAt: null },
+        { headers: NO_CACHE }
+      );
+    }
 
-    return NextResponse.json(responseData, {
-      headers: {
-        ...CORS,
-        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0',
-      },
-    });
+    return NextResponse.json(JSON.parse(raw), { headers: NO_CACHE });
   } catch {
     return NextResponse.json(
-      { content: {}, extraPages: [] },
-      {
-        headers: {
-          ...CORS,
-          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0',
-        },
-      }
+      { content: {}, extraPages: [], savedAt: null },
+      { headers: NO_CACHE }
     );
   }
 }
