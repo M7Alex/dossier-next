@@ -21,6 +21,17 @@ function playEagleSound() {
   } catch(e) {}
 }
 
+let _revealAudio: HTMLAudioElement | null = null;
+function playRevealSound() {
+  try {
+    if (_revealAudio) { _revealAudio.pause(); _revealAudio = null; }
+    const a = new Audio('/Effets_sonores_Firefly_4.wav');
+    a.volume = 0.8;
+    a.play().catch(() => {});
+    _revealAudio = a;
+  } catch(e) {}
+}
+
 type Phase = 'fingerprint' | 'eagle' | 'pad' | 'holo' | 'done';
 
 function launchConfetti() {
@@ -556,7 +567,7 @@ export default function IntroScreen() {
     setTimeout(()=>{ holoRef.current?.lock(); audio.lock(); setGStat('Déclassification en cours...'); },1620);
     setTimeout(()=>{ audio.voice(); setShowVBox(true); },2700);
     setTimeout(()=>{ setShowStamp(true); audio.stamp(); },4200);
-    setTimeout(()=>{ audio.reveal(); launchConfetti(); setPhase('done'); setMode(m); },6500);
+    setTimeout(()=>{ playRevealSound(); launchConfetti(); setPhase('done'); setMode(m); },6500);
   };
 
   if(phase==='done') return null;
