@@ -17,46 +17,106 @@ function getKVConfig() {
 async function kvSet(key: string, value: string) {
   const { url, token } = getKVConfig();
   if (!url || !token) throw new Error('KV not configured');
+
   const r = await fetch(`${url}/set/${encodeURIComponent(key)}`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
     body: JSON.stringify(value),
+    cache: 'no-store',
   });
+
   return r.json();
 }
 
 async function kvGet(key: string) {
   const { url, token } = getKVConfig();
   if (!url || !token) throw new Error('KV not configured');
+
   const r = await fetch(`${url}/get/${encodeURIComponent(key)}`, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    cache: 'no-store',
   });
+
   const j = await r.json();
   return j.result;
 }
 
 export async function OPTIONS() {
-  return new NextResponse(null, { status: 204, headers: CORS });
+  return new NextResponse(null, {
+    status: 204,
+    headers: CORS,
+  });
 }
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const payload = JSON.stringify({ ...body, savedAt: new Date().toISOString() });
+
+    const payload = JSON.stringify({
+      ...body,
+      savedAt: new Date().toISOString(),
+    });
+
     await kvSet('dossier_content', payload);
-    return NextResponse.json({ ok: true }, { headers: CORS });
+
+    return NextResponse.json(
+      { ok: true },
+      {
+        headers: {
+          ...CORS,
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+        },
+      }
+    );
   } catch (e) {
-    // Si KV pas configuré, on répond OK quand même (localStorage prend le relais)
-    return NextResponse.json({ ok: false, reason: 'KV not configured' }, { headers: CORS });
+    return NextResponse.json(
+      { ok: false, reason: 'KV not configured' },
+      {
+        headers: {
+          ...CORS,
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+        },
+      }
+    );
   }
 }
 
 export async function GET() {
   try {
     const raw = await kvGet('dossier_content');
-    if (!raw) return NextResponse.json({ content: {}, extraPages: [] }, { headers: CORS });
-    return NextResponse.json(JSON.parse(raw), { headers: CORS });
+
+    const responseData = raw
+      ? JSON.parse(raw)
+      : { content: {}, extraPages: [] };
+
+    return NextResponse.json(responseData, {
+      headers: {
+        ...CORS,
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+      },
+    });
   } catch {
-    return NextResponse.json({ content: {}, extraPages: [] }, { headers: CORS });
+    return NextResponse.json(
+      { content: {}, extraPages: [] },
+      {
+        headers: {
+          ...CORS,
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+        },
+      }
+    );
   }
 }

@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { useDossier } from '@/store';
 import { CONFIG } from '@/lib/config';
 import { toast } from 'sonner';
@@ -14,7 +14,7 @@ import Toast from '@/components/ui/Toast';
 const CustomCursor = dynamic(() => import('@/components/ui/CustomCursor'), { ssr: false });
 
 export default function Home() {
-  const { mode, currentSlide, content, extraPages, addPage, removePage, setContent, setMode } = useDossier();
+  const { mode, currentSlide, content, extraPages, addPage, removePage, setContent } = useDossier();
 
   // Force clear any persisted extra pages on mount (page 8 ghost fix)
   useEffect(() => {
@@ -23,6 +23,7 @@ export default function Home() {
       store.extraPages.forEach(p => store.removePage(p.id));
     }
   }, []);
+
   const totalSlides = CONFIG.slides.length + extraPages.length;
 
   // Preload legacy audio silently in background to avoid lag on slide 8
@@ -34,88 +35,190 @@ export default function Home() {
     document.head.appendChild(link);
   }, []);
 
-  // Load from KV on first unlock — merge with any local content
-  const kvLoaded = useRef(false);
-  useEffect(() => {
-    if (mode === 'locked' || kvLoaded.current) return;
-    kvLoaded.current = true;
-    fetch('/api/save').then(r => r.json()).then(data => {
-      if (data.content && Object.keys(data.content).length > 0) {
-        // KV content takes priority (it's the admin's last saved version)
-        Object.entries(data.content).forEach(([k, v]) => setContent(k, v as string));
-      }
-    }).catch(() => {});
-  }, [mode]);
+  // Chargement intelligent des données :
+  // priorité = #share > KV serveur > localStorage
+  const initialLoadDone = useRef(false);
 
-  // URL share param
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const hash = window.location.hash;
-    if (hash.startsWith('#share=')) {
-      try {
-        const dec = LZString.decompressFromEncodedURIComponent(hash.slice(7));
-        if (dec) {
-          const data = JSON.parse(dec);
-          Object.entries(data).forEach(([k, v]) => setContent(k, v as string));
-          setMode('visitor');
-          window.location.hash = '';
+    if (mode === 'locked' || initialLoadDone.current) return;
+    initialLoadDone.current = true;
+
+    const loadData = async () => {
+      if (typeof window === 'undefined') return;
+
+      const hash = window.location.hash;
+      let loadedData: any = null;
+
+      // 1. Priorité au lien partagé
+      if (hash && hash.startsWith('#share=')) {
+        try {
+          const dec = LZString.decompressFromEncodedURIComponent(hash.slice(7));
+          if (dec) {
+            loadedData = JSON.parse(dec);
+
+            // Copie locale de secours
+            localStorage.setItem('rp_data', JSON.stringify(loadedData));
+          }
+        } catch {}
+      }
+
+      // 2. Sinon on charge depuis le serveur
+      if (!loadedData) {
+        try {
+          const res = await fetch('/api/save', { cache: 'no-store' });
+          const data = await res.json();
+
+          if (data?.content && Object.keys(data.content).length > 0) {
+            loadedData = data.content;
+
+            // Sync locale de secours
+            localStorage.setItem('rp_data', JSON.stringify(loadedData));
+          }
+        } catch {}
+      }
+
+      // 3. Si serveur vide / erreur → fallback localStorage
+      if (!loadedData) {
+        const saved = localStorage.getItem('rp_data');
+        if (saved) {
+          try {
+            loadedData = JSON.parse(saved);
+          } catch {}
         }
-      } catch {}
-    }
-  }, []);
+      }
+
+      // 4. Appliquer
+      if (loadedData && typeof loadedData === 'object') {
+        Object.entries(loadedData).forEach(([k, v]) => {
+          setContent(k, typeof v === 'string' ? v : JSON.stringify(v));
+        });
+      }
+    };
+
+    loadData();
+  }, [mode, setContent]);
 
   // Stats tracking
   useEffect(() => {
     if (mode === 'locked' || typeof window === 'undefined' || window.location.protocol === 'file:') return;
     const sid = Math.random().toString(36).slice(2) + Date.now().toString(36);
-    fetch('/api/stats', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ event:'open', sessionId:sid }) });
+
+    fetch('/api/stats', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event: 'open', sessionId: sid }),
+    });
+
     const t = Date.now();
+
     return () => {
-      navigator.sendBeacon('/api/stats', JSON.stringify({ event:'close', sessionId:sid, data:{ duration: Math.round((Date.now()-t)/1000), lastSlide:currentSlide } }));
+      navigator.sendBeacon(
+        '/api/stats',
+        JSON.stringify({
+          event: 'close',
+          sessionId: sid,
+          data: {
+            duration: Math.round((Date.now() - t) / 1000),
+            lastSlide: currentSlide,
+          },
+        })
+      );
     };
-  }, [mode]);
+  }, [mode, currentSlide]);
 
   const handleAddPage = () => {
-    const BG = ['b1','b2','b3','b4','b5','b6'];
+    const BG = ['b1', 'b2', 'b3', 'b4', 'b5', 'b6'];
     const id = `dyn_${Date.now()}`;
-    addPage({ id, type:'custom', label:'Nouveau Chapitre', numero:String(totalSlides), icon:'◆', bg:BG[totalSlides%6], chibi:'pointer',
-      content: { titre:'Nouveau Chapitre', blocs:[{ key:'a', titre:'Section A', texte:'Contenu...' },{ key:'b', titre:'Section B', texte:'Contenu...' }] } });
+
+    addPage({
+      id,
+      type: 'custom',
+      label: 'Nouveau Chapitre',
+      numero: String(totalSlides),
+      icon: '◆',
+      bg: BG[totalSlides % 6],
+      chibi: 'pointer',
+      content: {
+        titre: 'Nouveau Chapitre',
+        blocs: [
+          { key: 'a', titre: 'Section A', texte: 'Contenu...' },
+          { key: 'b', titre: 'Section B', texte: 'Contenu...' },
+        ],
+      },
+    });
+
     toast.success('+ Page ajoutée');
   };
 
   const handleRemovePage = () => {
     const all = [...CONFIG.slides, ...extraPages];
     const slide = all[currentSlide];
-    if (all.length <= 1) { toast.error('Impossible de supprimer la dernière page'); return; }
-    if (!slide?.id?.startsWith('dyn_')) { toast.error('Impossible de supprimer une page intégrée'); return; }
+
+    if (all.length <= 1) {
+      toast.error('Impossible de supprimer la dernière page');
+      return;
+    }
+
+    if (!slide?.id?.startsWith('dyn_')) {
+      toast.error('Impossible de supprimer une page intégrée');
+      return;
+    }
+
     if (!confirm('Supprimer cette page ?')) return;
-    removePage(slide.id); toast.success('Page supprimée');
+
+    removePage(slide.id);
+    toast.success('Page supprimée');
   };
 
   const handleShare = () => {
     try {
       const comp = LZString.compressToEncodedURIComponent(JSON.stringify(content));
       const url = `${window.location.origin}${window.location.pathname}#share=${comp}`;
-      navigator.clipboard?.writeText(url).then(() => toast.success('🔗 Lien copié !')) ?? window.prompt('Lien :', url);
-    } catch { toast.error('Erreur de partage'); }
+
+      if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(url).then(() => {
+          toast.success('🔗 Lien copié !');
+        });
+      } else {
+        window.prompt('Lien :', url);
+      }
+    } catch {
+      toast.error('Erreur de partage');
+    }
   };
 
-  const handleExport = () => { toast('Utilisez Ctrl+P pour imprimer en PDF'); };
+  const handleExport = () => {
+    toast('Utilisez Ctrl+P pour imprimer en PDF');
+  };
 
   return (
     <>
-      <CustomCursor/>
-      <Toast/>
-      {mode === 'locked' && <IntroScreen/>}
+      <CustomCursor />
+      <Toast />
+      {mode === 'locked' && <IntroScreen />}
       {mode !== 'locked' && (
-        <div style={{ display:'flex', flexDirection:'column', height:'100dvh', background:'#050810', overflow:'hidden' }}>
-          <Toolbar totalSlides={totalSlides} onAddPage={handleAddPage} onRemovePage={handleRemovePage} onExport={handleExport} onShare={handleShare}/>
-          <div style={{ flex:1, minHeight:0, display:'flex', overflow:'hidden' }}>
-            <SlideEngine/>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            height: '100dvh',
+            background: '#050810',
+            overflow: 'hidden',
+          }}
+        >
+          <Toolbar
+            totalSlides={totalSlides}
+            onAddPage={handleAddPage}
+            onRemovePage={handleRemovePage}
+            onExport={handleExport}
+            onShare={handleShare}
+          />
+          <div style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
+            <SlideEngine />
           </div>
         </div>
       )}
-      <StatsPanel/>
+      <StatsPanel />
     </>
   );
 }
