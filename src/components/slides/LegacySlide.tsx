@@ -54,7 +54,7 @@ const CREDITS = [
   { role: 'Chef du Pôle Conseil', org: "Département des Finances" },
 ];
 
-type Phase = 'black' | 'flash' | 'panels' | 'character' | 'title' | 'credits';
+type Phase = 'black' | 'flash' | 'panels' | 'video' | 'character' | 'title' | 'credits';
 
 export default function LegacySlide({ isActive }: { isActive: boolean }) {
   const [phase, setPhase] = useState<Phase>('black');
@@ -75,11 +75,11 @@ export default function LegacySlide({ isActive }: { isActive: boolean }) {
       if (pi < PROJECTS.length) { setPanelIdx(pi); }
       else {
         clearInterval(iv);
-        setTimeout(() => setPhase('character'), 500);
+        setTimeout(() => setPhase('video'), 500);
       }
     }, 1400);
-    const t5 = setTimeout(() => setPhase('title'), 900 + PROJECTS.length * 1400 + 1400);
-    const t6 = setTimeout(() => setPhase('credits'), 900 + PROJECTS.length * 1400 + 4000);
+    const t5 = setTimeout(() => setPhase('title'), 900 + PROJECTS.length * 1400 + 500 + 8500 + 800);
+    const t6 = setTimeout(() => setPhase('credits'), 900 + PROJECTS.length * 1400 + 500 + 8500 + 4000);
     return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t5); clearTimeout(t6); clearInterval(iv); };
   }, [isActive]);
 
@@ -174,6 +174,29 @@ export default function LegacySlide({ isActive }: { isActive: boolean }) {
             </AnimatePresence>
           ))}
         </div>
+      )}
+
+      {/* VIDEO PHASE — après les panels */}
+      {phase === 'video' && (
+        <motion.div
+          initial={{ opacity:0 }} animate={{ opacity:1 }}
+          transition={{ duration:0.6 }}
+          style={{ position:'absolute', inset:0, zIndex:20, background:'#000' }}>
+          <video
+            src="/legacy_video.mp4"
+            autoPlay
+            playsInline
+            style={{ width:'100%', height:'100%', objectFit:'cover' }}
+            onEnded={() => setPhase('character')}
+            onError={() => setPhase('character')}
+          />
+          {/* Fondu sortant sur les 2 dernières secondes */}
+          <motion.div
+            initial={{ opacity:0 }}
+            animate={{ opacity:[0,0,0,0,0,0.3,1] }}
+            transition={{ duration:8, times:[0,0.5,0.6,0.7,0.75,0.88,1], ease:'easeIn' }}
+            style={{ position:'absolute', inset:0, background:'#000', pointerEvents:'none' }}/>
+        </motion.div>
       )}
 
       {/* CHARACTER + TITLE + CREDITS */}
