@@ -1,17 +1,33 @@
 import fs from 'fs';
-import fetch from 'node-fetch';
+import path from 'path';
 
-const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
-const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+const KV_REST_API_URL = process.env.KV_REST_API_URL;
+const KV_REST_API_TOKEN = process.env.KV_REST_API_TOKEN;
 
-async function main() {
-  const res = await fetch(`${url}/get/dossier_content`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  const data = await res.json();
-  const content = data.result || {};
-  fs.writeFileSync('dossier.json', JSON.stringify(content, null, 2));
-  console.log('✅ dossier.json créé avec succès !');
+if (!KV_REST_API_URL || !KV_REST_API_TOKEN) {
+  console.error('⚠️ Variables d’environnement KV manquantes !');
+  process.exit(1);
 }
 
-main();
+async function getKV(key) {
+  const res = await fetch(`${KV_REST_API_URL}/get/${encodeURIComponent(key)}`, {
+    headers: { Authorization: `Bearer ${KV_REST_API_TOKEN}` },
+  });
+  const j = await res.json();
+  return j.result;
+}
+
+(async () => {
+  try {
+    const data = await getKV('dossier_content');
+    if (!data) {
+      console.error('⚠️ Aucun contenu trouvé dans KV !');
+      process.exit(1);
+    }
+    const filePath = path.join(process.cwd(), 'dossier.json');
+    fs.writeFileSync(filePath, data, 'utf-8');
+    console.log('✅ dossier.json créé avec succès !');
+  } catch (e) {
+    console.error('❌ Erreur :', e);
+  }
+})();
