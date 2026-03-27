@@ -45,7 +45,7 @@ export default function Home() {
   }, []);
 
   // Chargement intelligent des données :
-  // priorité = #share > dossier.json serveur > localStorage
+  // priorité = #share > serveur > localStorage
   useEffect(() => {
     if (initialLoadDone.current) return;
     initialLoadDone.current = true;
@@ -55,16 +55,13 @@ export default function Home() {
 
       const hash = window.location.hash;
       let loadedData: any = null;
-      let loadedExtraPages: any[] = [];
 
       // 1. Priorité au lien partagé
       if (hash && hash.startsWith('#share=')) {
         try {
           const dec = LZString.decompressFromEncodedURIComponent(hash.slice(7));
           if (dec) {
-            const parsed = JSON.parse(dec);
-            loadedData = parsed.content || parsed;
-            loadedExtraPages = parsed.extraPages || [];
+            loadedData = JSON.parse(dec);
             localStorage.setItem('rp_data', JSON.stringify(loadedData));
             console.log('📦 Chargé depuis lien partagé');
           }
@@ -73,7 +70,7 @@ export default function Home() {
         }
       }
 
-      // 2. Sinon depuis le serveur (dossier.json)
+      // 2. Sinon depuis le serveur
       if (!loadedData) {
         try {
           const res = await fetch(`/api/save?t=${Date.now()}`, {
@@ -84,11 +81,10 @@ export default function Home() {
           const data = await res.json();
           console.log('🌍 Données serveur reçues :', data);
 
-          if (data?.content) {
-            loadedData = data.content || {};
-            loadedExtraPages = data.extraPages || [];
+          if (data?.content && Object.keys(data.content).length > 0) {
+            loadedData = data.content;
             localStorage.setItem('rp_data', JSON.stringify(loadedData));
-            console.log('📦 Chargé depuis dossier.json serveur');
+            console.log('📦 Chargé depuis serveur');
           }
         } catch (e) {
           console.error('Erreur chargement serveur', e);
@@ -113,12 +109,6 @@ export default function Home() {
         Object.entries(loadedData).forEach(([k, v]) => {
           setContent(k, v as string);
         });
-      }
-
-      // 5. Réinjecter les pages dynamiques si présentes
-      if (loadedExtraPages.length > 0) {
-        const store = useDossier.getState();
-        loadedExtraPages.forEach((p) => store.addPage(p));
       }
     };
 
@@ -200,12 +190,7 @@ export default function Home() {
 
   const handleShare = () => {
     try {
-      const payload = {
-        content,
-        extraPages,
-      };
-
-      const comp = LZString.compressToEncodedURIComponent(JSON.stringify(payload));
+      const comp = LZString.compressToEncodedURIComponent(JSON.stringify(content));
       const url = `${window.location.origin}${window.location.pathname}#share=${comp}`;
 
       navigator.clipboard?.writeText(url).then(() => {
