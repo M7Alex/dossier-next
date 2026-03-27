@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState, useRef } from 'react';
 import { motion, useInView } from 'framer-motion';
-import { useDossier } from '@/store';
+import { useDossier, getVal } from '@/store';
 import { CONFIG } from '@/lib/config';
 import Counter from '../ui/Counter';
 import RadarChart from '../ui/RadarChart';
@@ -53,7 +53,7 @@ function E({ sk, html, className, style, tag = 'div' }: {
   useEffect(() => {
     if (!ref.current) return;
     const current = ref.current.innerHTML;
-    const target  = content[sk] ?? html;
+    const target  = content[sk] ?? (CONFIG as any).defaults?.[sk] ?? html;
     if (current !== target && document.activeElement !== ref.current) {
       ref.current.innerHTML = target;
     }
@@ -282,12 +282,12 @@ function ParcoursContent({ c, editable, isActive }: any) {
 function VisionContent({ c, editable, isActive }: any) {
   const { content, setContent } = useDossier();
   const defaultAxes = [
-    { label: 'Rigueur',    key: 'rad_0', value: parseInt(content['rad_0'] || '88') },
-    { label: 'Impact',     key: 'rad_1', value: parseInt(content['rad_1'] || '92') },
-    { label: 'Vision',     key: 'rad_2', value: parseInt(content['rad_2'] || '85') },
-    { label: 'Cohérence',  key: 'rad_3', value: parseInt(content['rad_3'] || '90') },
-    { label: 'Leadership', key: 'rad_4', value: parseInt(content['rad_4'] || '87') },
-    { label: 'Innovation', key: 'rad_5', value: parseInt(content['rad_5'] || '80') },
+    { label: 'Rigueur',    key: 'rad_0', value: parseInt(content['rad_0'] || (CONFIG as any).defaults?.['rad_0'] || '88') },
+    { label: 'Impact',     key: 'rad_1', value: parseInt(content['rad_1'] || (CONFIG as any).defaults?.['rad_1'] || '92') },
+    { label: 'Vision',     key: 'rad_2', value: parseInt(content['rad_2'] || (CONFIG as any).defaults?.['rad_2'] || '85') },
+    { label: 'Cohérence',  key: 'rad_3', value: parseInt(content['rad_3'] || (CONFIG as any).defaults?.['rad_3'] || '90') },
+    { label: 'Leadership', key: 'rad_4', value: parseInt(content['rad_4'] || (CONFIG as any).defaults?.['rad_4'] || '87') },
+    { label: 'Innovation', key: 'rad_5', value: parseInt(content['rad_5'] || (CONFIG as any).defaults?.['rad_5'] || '80') },
   ];
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20, height: '100%' }}>

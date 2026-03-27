@@ -8,7 +8,7 @@ interface Props { isActive: boolean; }
 export default function CoverSlide({ isActive }: Props) {
   const { content, setContent, mode } = useDossier();
   const editable = mode === 'admin';
-  const get = (k: string, def: string) => content[k] ?? def;
+  const get = (k: string, def: string) => content[k] ?? (CONFIG as any).defaults?.[k] ?? def;
   const set = (k: string) => (e: React.FormEvent<HTMLDivElement>) =>
     setContent(k, (e.target as HTMLDivElement).innerHTML);
 

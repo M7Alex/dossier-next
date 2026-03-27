@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { CONFIG } from '@/lib/config';
 
 type AccessMode = 'locked' | 'visitor' | 'admin';
 
@@ -8,6 +9,7 @@ interface DossierState {
   setMode: (m: AccessMode) => void;
   currentSlide: number;
   setSlide: (i: number) => void;
+  // content = overrides admins UNIQUEMENT — les visiteurs voient toujours CONFIG.defaults
   content: Record<string, string>;
   setContent: (key: string, value: string) => void;
   resetContent: () => void;
@@ -33,6 +35,7 @@ export const useDossier = create<DossierState>()(
       setMode: (m) => set({ mode: m }),
       currentSlide: 0,
       setSlide: (i) => set({ currentSlide: i }),
+      // content vide par défaut — les composants lisent CONFIG.defaults via getVal()
       content: {},
       setContent: (key, value) => set((s) => ({ content: { ...s.content, [key]: value } })),
       resetContent: () => set({ content: {} }),
@@ -51,18 +54,24 @@ export const useDossier = create<DossierState>()(
       toggleWatermark: () => set((s) => ({ showWatermark: !s.showWatermark })),
     }),
     {
-      name: 'dossier-rp-v10',
+      name: 'dossier-rp-v11', // ← clé changée : efface l'ancien localStorage automatiquement
       partialize: (s) => ({
-        content: s.content,
+        // On ne persiste PAS content — tout le monde voit CONFIG.defaults
+        // Seuls volume et mode (non-sensible) sont gardés
         volumeLevel: s.volumeLevel,
-        // extraPages intentionally excluded — never persisted
       }),
       merge: (_persisted: any, current: any) => ({
         ...current,
-        content: (_persisted as any)?.content || {},
+        content: {}, // toujours vide au chargement → utilise CONFIG.defaults
         volumeLevel: (_persisted as any)?.volumeLevel ?? 70,
-        extraPages: [], // always empty on load
+        extraPages: [],
       }),
     }
   )
 );
+
+// ── Helper global : lit le store puis fallback sur CONFIG.defaults ────────────
+// Utilisable dans tous les composants comme alternative à useDossier()
+export function getVal(content: Record<string, string>, sk: string, fallback: string): string {
+  return content[sk] ?? CONFIG.defaults[sk] ?? fallback;
+}

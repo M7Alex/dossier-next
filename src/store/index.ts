@@ -1,1 +1,1 @@
-export { useDossier } from './dossier';
+export { useDossier, getVal } from './dossier';
