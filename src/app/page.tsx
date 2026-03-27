@@ -27,52 +27,93 @@ export default function Home() {
   const totalSlides = CONFIG.slides.length + extraPages.length;
   const initialLoadDone = useRef(false);
 
-useEffect(() => {
-  if (mode === 'locked' || initialLoadDone.current) return;
-  initialLoadDone.current = true;
-
-  const loadData = async () => {
-    if (typeof window === 'undefined') return;
-
-    const hash = window.location.hash;
-    let loadedData: any = null;
-
-    // 1. Priorité au lien partagé
-    if (hash && hash.startsWith('#share=')) {
-      try {
-        const dec = LZString.decompressFromEncodedURIComponent(hash.slice(7));
-        if (dec) {
-          loadedData = JSON.parse(dec);
-          localStorage.setItem('rp_data', JSON.stringify(loadedData));
-        }
-      } catch {}
+  // Nettoyage des pages dynamiques fantômes au démarrage
+  useEffect(() => {
+    const store = useDossier.getState();
+    if (store.extraPages.length > 0) {
+      store.extraPages.forEach((p) => store.removePage(p.id));
     }
+  }, []);
 
-    // 2. Sinon fallback sur le contenu figé dans config.ts
-    if (!loadedData && CONFIG.initialContent) {
-      loadedData = CONFIG.initialContent;
-    }
+  // Préload audio
+  useEffect(() => {
+    const link = document.createElement('link');
+    link.rel = 'preload';
+    link.as = 'audio';
+    link.href = '/legacy_theme.mp3';
+    document.head.appendChild(link);
+  }, []);
 
-    // 3. Dernier fallback = localStorage
-    if (!loadedData) {
-      const saved = localStorage.getItem('rp_data');
-      if (saved) {
+  // Chargement intelligent des données :
+  // priorité = #share > serveur > localStorage
+  useEffect(() => {
+    if (initialLoadDone.current) return;
+    initialLoadDone.current = true;
+
+    const loadData = async () => {
+      if (typeof window === 'undefined') return;
+
+      const hash = window.location.hash;
+      let loadedData: any = null;
+
+      // 1. Priorité au lien partagé
+      if (hash && hash.startsWith('#share=')) {
         try {
-          loadedData = JSON.parse(saved);
-        } catch {}
+          const dec = LZString.decompressFromEncodedURIComponent(hash.slice(7));
+          if (dec) {
+            loadedData = JSON.parse(dec);
+            localStorage.setItem('rp_data', JSON.stringify(loadedData));
+            console.log('📦 Chargé depuis lien partagé');
+          }
+        } catch (e) {
+          console.error('Erreur chargement share', e);
+        }
       }
-    }
 
-    // 4. Appliquer
-    if (loadedData) {
-      Object.entries(loadedData).forEach(([k, v]) => {
-        setContent(k, v as string);
-      });
-    }
-  };
+      // 2. Sinon depuis le serveur
+      if (!loadedData) {
+        try {
+          const res = await fetch(`/api/save?t=${Date.now()}`, {
+            method: 'GET',
+            cache: 'no-store',
+          });
 
-  loadData();
-}, [mode, setContent]);
+          const data = await res.json();
+          console.log('🌍 Données serveur reçues :', data);
+
+          if (data?.content && Object.keys(data.content).length > 0) {
+            loadedData = data.content;
+            localStorage.setItem('rp_data', JSON.stringify(loadedData));
+            console.log('📦 Chargé depuis serveur');
+          }
+        } catch (e) {
+          console.error('Erreur chargement serveur', e);
+        }
+      }
+
+      // 3. Sinon fallback localStorage
+      if (!loadedData) {
+        const saved = localStorage.getItem('rp_data');
+        if (saved) {
+          try {
+            loadedData = JSON.parse(saved);
+            console.log('📦 Chargé depuis localStorage');
+          } catch (e) {
+            console.error('Erreur localStorage', e);
+          }
+        }
+      }
+
+      // 4. Appliquer les données
+      if (loadedData) {
+        Object.entries(loadedData).forEach(([k, v]) => {
+          setContent(k, v as string);
+        });
+      }
+    };
+
+    loadData();
+  }, [setContent]);
 
   // Stats tracking
   useEffect(() => {
