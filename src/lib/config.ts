@@ -8,14 +8,12 @@ export const CONFIG = {
     year: '2026',
   },
 
-  // ⬇️ AJOUT IMPORTANT : ancien format attendu par ton app
   candidat: {
     nomComplet: 'Alex Stark',
     poste: 'Poste visé',
     departement: 'Organisation / Gouvernement',
   },
 
-  // ⬇️ AJOUT IMPORTANT : ancien format attendu par certaines slides / IA
   presentation: {
     accroche: 'Candidature immersive et structurée',
     objectif: 'Présenter une vision claire, cohérente et professionnelle.',
@@ -40,6 +38,10 @@ export const CONFIG = {
     enabled: true,
   },
 
-  // ⬇️ C'est TON export figé depuis Chrome
+  // ⚠️ AJOUTÉ pour corriger /api/stats/route.ts
+  codes: {
+    adminStats: 'admin123',
+  },
+
   initialContent: dossierData,
 } as const;
