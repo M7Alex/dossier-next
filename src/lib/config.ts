@@ -27,7 +27,7 @@ export const CONFIG = {
     intro_eng: `Mon engagement envers ce poste sera total. C'est le seul pour lequel je suis prêt à engager pleinement mon temps, mes compétences et mes ressources.`,
 
     // Parcours — timeline
-    parc_sv0: "6+", parc_sv1: "",
+    parc_sv0: "5+", parc_sv1: "9",
     parc_o0: "Freelance",
     parc_r0: "Actuellement - Graphiste Freelance &amp; Conseillé d'entreprise Freelance",
     parc_d0: "Graphiste freelance (création graphique diverse), et conseillé dans la gestion ainsi que l'organisation de sociétés.",
@@ -120,7 +120,7 @@ export const CONFIG = {
           { role: "Patron / Co-Patron & intervenant — Février 2024 / Janvier 2025", org: "Plusieurs entreprises", desc: "Gestion multi-entreprises, restructuration, plans financiers, optimisation de la logistique... Abattoir, La ferme LS, Bûcherons, Globe Oil, Cayo Cigare, Piger Logstics, Graphiste, Université LS, Bean Machine, Harmony Repair, Recycan..." },
           { role: "Employé - Manager - Co-Patron — Juin 2023 / décembre 2023", org: "Hen House — Début de parcours", desc: "Maitrise de l'évènementiel, de l'aspect financier ainsi que de la gestion d'une équipe et d'une entreprise en ville." },
         ],
-        stats: [{ valeur: "6+", label: "Entreprises gérées" }, { valeur: "", label: "" }],
+        stats: [{ valeur: "5+", label: "Entreprises gérées" }, { valeur: "9", label: "Poste de direction" }],
         competences: [
           "Direction opérationnelle et stratégique de différentes sociétés",
           "Conseil juridique et structurel (création du pôle conseil d'entreprise)",
